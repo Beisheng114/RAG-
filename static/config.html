@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>系统配置预览</title>
+  <script src="libs/tailwindcss.min.js"></script>
+  <link href="libs/font-awesome-4.7.0.min.css" rel="stylesheet" />
+</head>
+<body class="min-h-screen bg-slate-100 text-slate-800">
+  <div class="max-w-5xl mx-auto px-4 md:px-8 py-6">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+      <div>
+        <h1 class="text-2xl md:text-3xl font-bold text-blue-700"><i class="fa fa-cog"></i> 系统配置预览</h1>
+        <p class="text-sm text-slate-500 mt-1">用于查看后端当前配置（敏感字段已脱敏）。</p>
+      </div>
+      <div class="flex gap-2">
+        <a href="index.html?page=chat" class="inline-flex items-center gap-2 text-sm px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">
+          <i class="fa fa-comments-o"></i> 返回对话页面
+        </a>
+        <a href="home.html" class="inline-flex items-center gap-2 text-sm px-4 py-2 rounded-lg bg-white border border-slate-200 text-blue-600 hover:bg-blue-50">
+          <i class="fa fa-home"></i> 返回首页
+        </a>
+      </div>
+    </div>
+
+    <section id="login-panel" class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+      <h2 class="text-lg font-semibold mb-4">管理员认证</h2>
+      <div class="grid md:grid-cols-[1fr_auto] gap-3">
+        <input id="admin-token-input" type="password" class="w-full border rounded-lg px-3 py-2" placeholder="请输入管理员密钥（X-Admin-Token）" />
+        <button id="config-login-btn" class="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-5 py-2">查看配置</button>
+      </div>
+    </section>
+
+    <section id="config-panel" class="hidden mt-4 bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+      <div class="flex items-center justify-between mb-3">
+        <h3 class="font-semibold">当前配置（脱敏）</h3>
+        <button id="refresh-config" class="text-sm px-3 py-1.5 rounded-lg bg-slate-700 text-white hover:bg-slate-800">
+          <i class="fa fa-refresh"></i> 刷新
+        </button>
+      </div>
+      <pre id="config-text" class="bg-slate-900 text-slate-100 rounded-lg p-3 overflow-auto text-xs max-h-[65vh]"></pre>
+    </section>
+  </div>
+
+  <script>
+    const API_BASE_URL = '/api';
+    let adminToken = '';
+
+    const loginPanel = document.getElementById('login-panel');
+    const configPanel = document.getElementById('config-panel');
+    const tokenInput = document.getElementById('admin-token-input');
+    const loginBtn = document.getElementById('config-login-btn');
+    const refreshBtn = document.getElementById('refresh-config');
+    const configText = document.getElementById('config-text');
+
+    async function loadConfig() {
+      const res = await fetch(`${API_BASE_URL}/config/preview`, {
+        headers: { 'X-Admin-Token': adminToken }
+      });
+      const data = await res.json();
+      if (!res.ok || data.success === false) {
+        throw new Error(data.message || data.detail || `请求失败: ${res.status}`);
+      }
+      configText.textContent = JSON.stringify(data.data?.config || {}, null, 2);
+      return data;
+    }
+
+    async function doLoginAndLoad() {
+      const token = tokenInput.value.trim();
+      if (!token) {
+        alert('请输入管理员密钥');
+        return;
+      }
+
+      adminToken = token;
+      try {
+        await loadConfig();
+        loginPanel.classList.add('hidden');
+        configPanel.classList.remove('hidden');
+      } catch (e) {
+        adminToken = '';
+        alert(`认证失败：${e.message}`);
+      }
+    }
+
+    loginBtn.addEventListener('click', doLoginAndLoad);
+    tokenInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        doLoginAndLoad();
+      }
+    });
+    refreshBtn.addEventListener('click', async () => {
+      try {
+        await loadConfig();
+      } catch (e) {
+        alert(`刷新失败：${e.message}`);
+      }
+    });
+  </script>
+</body>
+</html>

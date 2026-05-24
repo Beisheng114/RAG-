@@ -1,0 +1,17 @@
+首先打开打开ollama和Qdrant还有Neo4j文件夹中的bat文件或者exe文件，打开它们。
+
+neo4j.bat install-service
+首先运行一遍csv_to_neo4j.py  把数据导入到neo4j数据库
+后续使用Neo4j.bat start 启动即可无需进行导入
+
+
+模型启动指令
+ollama serve 即可
+或者
+ollama run kamekichi128/qwen3-4b-instruct-2507 #首次启用即可。
+
+然后启动完以下环境可运行app.py
+
+
+
+

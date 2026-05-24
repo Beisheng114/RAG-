@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>船舶故障维修RAG系统 - 页面分流</title>
+  <script src="libs/tailwindcss.min.js"></script>
+  <link href="libs/font-awesome-4.7.0.min.css" rel="stylesheet" />
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-800">
+  <div class="max-w-6xl mx-auto px-6 py-10">
+    <h1 class="text-3xl font-bold mb-2">船舶故障维修RAG系统</h1>
+    <p class="text-slate-500 mb-8">请选择要进入的独立页面（非标签页切换）</p>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+      <a href="index.html?page=chat" class="bg-white border rounded-xl p-5 shadow-sm hover:shadow-md transition">
+        <div class="text-blue-600 text-xl mb-2"><i class="fa fa-comments-o"></i></div>
+        <div class="font-semibold text-lg">对话页面</div>
+        <div class="text-sm text-slate-500 mt-1">问答、会话记录、导出</div>
+      </a>
+
+      <a href="extract.html" class="bg-white border rounded-xl p-5 shadow-sm hover:shadow-md transition">
+        <div class="text-blue-600 text-xl mb-2"><i class="fa fa-magic"></i></div>
+        <div class="font-semibold text-lg">知识图谱提取</div>
+        <div class="text-sm text-slate-500 mt-1">从案例中提取结构化知识</div>
+      </a>
+
+      <a href="kg_admin.html" class="bg-white border rounded-xl p-5 shadow-sm hover:shadow-md transition">
+        <div class="text-blue-600 text-xl mb-2"><i class="fa fa-database"></i></div>
+        <div class="font-semibold text-lg">知识图谱管理</div>
+        <div class="text-sm text-slate-500 mt-1">图谱维护、查询、导入</div>
+      </a>
+
+      <a href="config.html" class="bg-white border rounded-xl p-5 shadow-sm hover:shadow-md transition">
+        <div class="text-blue-600 text-xl mb-2"><i class="fa fa-cog"></i></div>
+        <div class="font-semibold text-lg">配置预览</div>
+        <div class="text-sm text-slate-500 mt-1">查看后端配置（脱敏）</div>
+      </a>
+    </div>
+  </div>
+</body>
+</html>

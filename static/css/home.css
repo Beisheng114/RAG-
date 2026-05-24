@@ -1,0 +1,157 @@
+
+
+    /* 主容器 — 优雅居中呼吸感 */
+    .rag-dashboard {
+      max-width: 1280px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* 头部区域 — 更细腻的船舶主题 */
+    .hero-section {
+      margin-bottom: 2.5rem;
+      position: relative;
+    }
+
+    .hero-title {
+      font-size: 2.5rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      background: linear-gradient(120deg, #0c4e6e, #1e7b9c);
+      background-clip: text;
+      -webkit-background-clip: text;
+      color: transparent;
+      display: inline-block;
+      margin-bottom: 0.5rem;
+    }
+
+    .hero-sub {
+      font-size: 1rem;
+      color: #2c5a6e;
+      border-left: 3px solid #2c9cd4;
+      padding-left: 1rem;
+      margin-top: 0.3rem;
+      font-weight: 450;
+    }
+
+    /* 分流卡片网格 — 保持原三列/双列/单列响应式 */
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 1.8rem;
+      margin-top: 0.5rem;
+    }
+
+    /* 纯自定义卡片样式 (保留原有白底/圆角/阴影/悬浮效果，强化精致感) */
+    .nav-card {
+      background: rgba(255, 255, 255, 0.96);
+      backdrop-filter: blur(0px);
+      border-radius: 1.5rem;
+      padding: 1.6rem 1.8rem 1.8rem 1.8rem;
+      box-shadow: 0 8px 20px rgba(0, 20, 30, 0.08), 0 2px 4px rgba(0, 0, 0, 0.02);
+      transition: all 0.25s ease-in-out;
+      border: 1px solid rgba(46, 125, 150, 0.12);
+      text-decoration: none;
+      display: block;
+      cursor: pointer;
+    }
+
+    .nav-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 20px 30px -12px rgba(0, 60, 80, 0.2);
+      border-color: rgba(32, 156, 200, 0.4);
+      background: #ffffff;
+    }
+
+    /* 图标区域 — 自定义无字体库，使用emoji + 矢量风格背景 */
+    .card-icon {
+      width: 52px;
+      height: 52px;
+      background: linear-gradient(135deg, #eef7fc 0%, #e1f0f7 100%);
+      border-radius: 1.2rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.9rem;
+      margin-bottom: 1.3rem;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.8), 0 2px 5px rgba(0,0,0,0.02);
+      transition: transform 0.2s;
+    }
+
+    .nav-card:hover .card-icon {
+      transform: scale(1.02);
+      background: linear-gradient(135deg, #e0f0f8, #cde9f3);
+    }
+
+    .card-title {
+      font-size: 1.45rem;
+      font-weight: 600;
+      color: #155f7c;
+      margin-bottom: 0.6rem;
+      letter-spacing: -0.2px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .card-desc {
+      font-size: 0.88rem;
+      line-height: 1.4;
+      color: #3f6e82;
+      border-top: 1px solid #e2edf2;
+      margin-top: 0.7rem;
+      padding-top: 0.7rem;
+    }
+
+    /* 小型点缀 */
+    .badge-new {
+      background: #d9f0f7;
+      font-size: 0.7rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 30px;
+      color: #0e6f8c;
+      font-weight: 500;
+      margin-left: 0.6rem;
+    }
+
+    /* 页脚简洁 */
+    .footer-note {
+      margin-top: 3.5rem;
+      text-align: center;
+      font-size: 0.8rem;
+      color: #6f9ab0;
+      border-top: 1px solid #cde0e8;
+      padding-top: 1.8rem;
+      font-weight: 450;
+    }
+
+    @media (max-width: 640px) {
+      body {
+        padding: 1.2rem;
+      }
+      .hero-title {
+        font-size: 1.9rem;
+      }
+      .card-grid {
+        gap: 1.2rem;
+      }
+      .nav-card {
+        padding: 1.3rem 1.4rem;
+      }
+    }
+
+    /* 辅助动画 */
+    @keyframes fadeSlideUp {
+      from {
+        opacity: 0;
+        transform: translateY(12px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .rag-dashboard {
+      animation: fadeSlideUp 0.4s ease-out;
+    }

@@ -1,0 +1,94 @@
+
+    .bg-slate-100 {
+      background-color: #FFFFFF !important;
+    }
+    .bg-white {
+      background-color: #FFFFFF !important;
+      border: 1px solid #B0C4DE !important;     
+      box-shadow: 0 4px 12px rgba(30, 144, 255, 0.04);
+      transition: box-shadow 0.2s ease, border-color 0.2s;
+    }
+    .bg-white:hover {
+      border-color: #87CEFA !important;
+      box-shadow: 0 8px 20px -8px rgba(30, 144, 255, 0.12);
+    }
+    .text-blue-700, .text-blue-600 {
+      color: #1E90FF !important;     
+    }
+    .text-slate-500, .text-slate-600, .text-slate-700 {
+      color: #4682B4 !important;    
+    }
+    .text-slate-800 {
+      color: #2c3e66 !important;
+    }
+    .bg-blue-600 {
+      background-color: #1E90FF !important;
+      transition: all 0.2s ease;
+    }
+    .bg-blue-600:hover {
+      background-color: #6495ED !important;   
+      transform: translateY(-1px);
+    }
+    .bg-slate-700 {
+      background-color: #4682B4 !important;
+    }
+    .bg-slate-700:hover {
+      background-color: #5F9EA0 !important;   
+    }
+    .border-slate-200 {
+      border-color: #B0C4DE !important;
+    }
+    .bg-white.border-slate-200.text-blue-600 {
+      color: #1E90FF !important;
+    }
+    .bg-white.border-slate-200.text-blue-600:hover {
+      background-color: #F0F8FF !important;   
+      border-color: #87CEFA !important;
+    }
+    input, .border {
+      border-color: #B0C4DE !important;
+      border-radius: 0.75rem;
+      transition: 0.2s;
+    }
+    input:focus {
+      border-color: #1E90FF !important;
+      box-shadow: 0 0 0 3px rgba(30, 144, 255, 0.15);
+      outline: none;
+    }
+    h2, h3, .font-semibold {
+      color: #1E4A76;
+    }
+    .bg-slate-900 {
+      background-color: #0b2b3b !important;   /* 深蓝黑底，配合浅蓝文本 */
+      border: 1px solid #4682B4;
+    }
+    .text-slate-100 {
+      color: #E0FFFF !important;
+    }
+    .rounded-2xl {
+      border-radius: 1.25rem;
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .fa, i {
+      color: inherit;
+    }
+    .text-blue-600 i, .text-blue-700 i {
+      color: #1E90FF;
+    }
+    hr {
+      border-color: #E0FFFF;
+    }
+    .text-sm.text-slate-500 {
+      color: #5F9EA0 !important;
+    }
+    pre {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 0.75rem;
+      line-height: 1.5;
+    }
+    button {
+      cursor: pointer;
+    }

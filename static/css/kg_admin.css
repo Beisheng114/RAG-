@@ -1,0 +1,111 @@
+
+
+    .bg-slate-100 {
+      background-color: #FFFFFF !important;
+    }
+    .bg-white {
+      background-color: #FFFFFF !important;
+      border: 1px solid #B0C4DE !important;     
+      box-shadow: 0 4px 14px rgba(30, 144, 255, 0.04);
+      transition: box-shadow 0.2s ease, border-color 0.2s;
+    }
+    .bg-white:hover {
+      border-color: #87CEFA !important;
+      box-shadow: 0 8px 22px -8px rgba(30, 144, 255, 0.12);
+    }
+
+    /* 标题/文本浅蓝系着色 */
+    .text-blue-700, .text-blue-600 {
+      color: #1E90FF !important;    
+    }
+    .text-slate-500, .text-slate-600, .text-slate-700, .text-slate-800 {
+      color: #4682B4 !important;   
+    }
+    .text-green-600 {
+      color: #008B8B !important;      
+    }
+    .text-amber-600 {
+      color: #00BFFF !important;     
+    }
+    .bg-blue-600 {
+      background-color: #1E90FF !important;
+      transition: all 0.2s ease;
+    }
+    .bg-blue-600:hover {
+      background-color: #6495ED !important;  
+      transform: translateY(-1px);
+    }
+    .bg-slate-700 {
+      background-color: #4682B4 !important;
+    }
+    .bg-slate-700:hover {
+      background-color: #5F9EA0 !important;  
+    }
+    .bg-emerald-600 {
+      background-color: #48D1CC !important;  
+    }
+    .bg-emerald-600:hover {
+      background-color: #40E0D0 !important;
+      transform: translateY(-1px);
+    }
+    .bg-slate-200 {
+      background-color: #E0FFFF !important;   
+      color: #1E90FF;
+    }
+    .bg-slate-200:hover {
+      background-color: #AFEEEE !important;
+    }
+    .bg-slate-50 {
+      background-color: #F0F8FF !important;  
+    }
+    input, select, .border {
+      border-color: #B0C4DE !important;
+      border-radius: 0.75rem;
+      transition: 0.2s;
+    }
+    input:focus {
+      border-color: #1E90FF !important;
+      box-shadow: 0 0 0 3px rgba(30, 144, 255, 0.15);
+      outline: none;
+    }
+
+    h2, h3, .font-semibold {
+      color: #1E4A76;
+      letter-spacing: -0.2px;
+    }
+    .bg-slate-900 {
+      background-color: #0b2b3b !important;
+      border: 1px solid #4682B4;
+    }
+    .text-slate-100 {
+      color: #E0FFFF !important;
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+    a, i, .fa {
+      transition: color 0.2s;
+    }
+    .hover\:bg-blue-50:hover {
+      background-color: #F0F8FF !important;
+    }
+    .border-slate-200 {
+      border-color: #B0C4DE !important;
+    }
+    canvas {
+      max-height: 100%;
+    }
+    .rounded-2xl {
+      border-radius: 1.25rem;
+    }
+    .shadow-sm {
+      box-shadow: 0 2px 6px rgba(30, 144, 255, 0.05);
+    }
+    hr {
+      border-color: #E0FFFF;
+    }
+    .text-xs.text-slate-500, .text-sm.text-slate-500 {
+      color: #5F9EA0 !important;
+    }

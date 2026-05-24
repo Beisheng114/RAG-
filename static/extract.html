@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>知识图谱提取</title>
+  <script src="libs/tailwindcss.min.js"></script>
+  <link href="libs/font-awesome-4.7.0.min.css" rel="stylesheet" />
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-800">
+  <div class="max-w-5xl mx-auto px-6 py-8">
+    <div class="flex items-center justify-between mb-6">
+      <h1 class="text-2xl font-bold text-blue-600"><i class="fa fa-magic"></i> 知识图谱抽取（kg_generator_v2）</h1>
+      <a href="home.html" class="text-sm text-blue-600 hover:underline">返回首页分流</a>
+    </div>
+
+    <div class="bg-white border rounded-xl p-5 shadow-sm mb-5">
+      <p class="text-sm text-slate-600 mb-4 leading-6">
+        本页面用于执行船舶维修知识图谱抽取任务。系统将基于您上传的文件调用 <code>csv_generate/kg_generator_v2.py</code> 完成结构化抽取，
+        并在下方实时展示任务日志与执行状态，以便对处理进度进行可视化监控。
+      </p>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="md:col-span-2">
+          <label class="block text-sm font-medium mb-2">上传文件（支持 .md/.txt/.pdf/.png/.jpg）</label>
+          <input id="upload-file" type="file" accept=".md,.txt,.pdf,.png,.jpg,.jpeg" class="w-full border rounded-lg px-3 py-2 bg-white" />
+          <p class="text-xs text-slate-500 mt-1">仅允许上传 .md/.txt/.pdf/.png/.jpg 文件</p>
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-2">输出目录</label>
+          <input id="output-dir" class="w-full border rounded-lg px-3 py-2" value="csv_generate" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-2">配置文件</label>
+          <input id="config-path" class="w-full border rounded-lg px-3 py-2" value="config.yaml" />
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-2">大模型提供方（可选）</label>
+          <select id="llm-provider" class="w-full border rounded-lg px-3 py-2">
+            <option value="">跟随配置文件默认值</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm font-medium mb-2">大模型 API Key（可选）</label>
+          <input id="llm-api-key" type="password" class="w-full border rounded-lg px-3 py-2" placeholder="如填写将覆盖配置中的api_key" />
+        </div>
+        <div class="md:col-span-2">
+          <label class="block text-sm font-medium mb-2">书籍名称（可选）</label>
+          <input id="book-name" class="w-full border rounded-lg px-3 py-2" placeholder="例如：船舶维修手册A" />
+        </div>
+      </div>
+
+      <div class="mt-5 border rounded-lg p-4 bg-slate-50">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="font-semibold text-slate-700">OCR对接（预留接口）</h2>
+          <span class="text-xs text-slate-500">当上传PDF/图片时会尝试调用</span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-sm font-medium mb-2">OCR Provider（可选）</label>
+            <input id="ocr-provider" class="w-full border rounded-lg px-3 py-2" placeholder="baidu / paddle / custom" />
+          </div>
+          <div class="md:col-span-2">
+            <label class="block text-sm font-medium mb-2">OCR Endpoint（可选）</label>
+            <input id="ocr-endpoint" class="w-full border rounded-lg px-3 py-2" placeholder="例如：https://your-ocr-service/api/ocr" />
+          </div>
+          <div class="md:col-span-3">
+            <label class="block text-sm font-medium mb-2">OCR API Key（可选）</label>
+            <input id="ocr-api-key" type="password" class="w-full border rounded-lg px-3 py-2" placeholder="若服务要求鉴权可填写" />
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-5 flex flex-wrap gap-3">
+        <button id="start-btn" class="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2">开始抽取</button>
+        <button id="cancel-btn" class="bg-rose-600 hover:bg-rose-700 text-white rounded-lg px-4 py-2" disabled>取消任务</button>
+        <button id="clear-log-btn" class="bg-slate-600 hover:bg-slate-700 text-white rounded-lg px-4 py-2">清空日志</button>
+      </div>
+
+      <div id="status-box" class="mt-4 text-sm text-slate-700">
+        当前状态：<span id="status-text" class="font-semibold">未启动</span>
+      </div>
+      <div id="task-id-box" class="mt-1 text-xs text-slate-500 hidden">任务ID：<span id="task-id-text"></span></div>
+    </div>
+
+    <div class="bg-white border rounded-xl p-5 shadow-sm">
+      <div class="flex items-center justify-between mb-2">
+        <div class="text-sm font-semibold">实时命令行输出</div>
+        <div class="text-xs text-slate-500">自动轮询</div>
+      </div>
+      <pre id="log-output" class="bg-slate-900 text-slate-100 rounded-lg p-3 overflow-auto text-xs h-[420px]"></pre>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE_URL = '/api';
+
+    const startBtn = document.getElementById('start-btn');
+    const cancelBtn = document.getElementById('cancel-btn');
+    const clearLogBtn = document.getElementById('clear-log-btn');
+    const statusText = document.getElementById('status-text');
+    const taskIdBox = document.getElementById('task-id-box');
+    const taskIdText = document.getElementById('task-id-text');
+    const logOutput = document.getElementById('log-output');
+    const uploadFileInput = document.getElementById('upload-file');
+    const llmProviderSelect = document.getElementById('llm-provider');
+
+    const ALLOWED_UPLOAD_EXTENSIONS = ['.md', '.txt', '.pdf', '.png', '.jpg', '.jpeg'];
+
+    let currentTaskId = null;
+    let logIndex = 0;
+    let pollTimer = null;
+
+    function setStatus(text, cssClass = 'text-slate-700') {
+      statusText.className = `font-semibold ${cssClass}`;
+      statusText.textContent = text;
+    }
+
+    async function loadLlmOptions() {
+      const configPath = (document.getElementById('config-path').value || 'config.yaml').trim() || 'config.yaml';
+      try {
+        const url = `${API_BASE_URL}/kg/extract/options?config_path=${encodeURIComponent(configPath)}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (!data.success) {
+          return;
+        }
+
+        const currentValue = llmProviderSelect.value;
+        llmProviderSelect.innerHTML = '<option value="">跟随配置文件默认值</option>';
+
+        (data.llm_providers || []).forEach(provider => {
+          const option = document.createElement('option');
+          option.value = provider;
+          option.textContent = provider;
+          llmProviderSelect.appendChild(option);
+        });
+
+        if (currentValue && (data.llm_providers || []).includes(currentValue)) {
+          llmProviderSelect.value = currentValue;
+        } else if (data.default_provider && (data.llm_providers || []).includes(data.default_provider)) {
+          llmProviderSelect.value = data.default_provider;
+        }
+      } catch (_) {
+        // 忽略加载失败，不阻断主流程
+      }
+    }
+
+    function appendLogs(lines) {
+      if (!Array.isArray(lines) || lines.length === 0) return;
+      const text = lines.join('\n') + '\n';
+      logOutput.textContent += text;
+      logOutput.scrollTop = logOutput.scrollHeight;
+    }
+
+    function stopPolling() {
+      if (pollTimer) {
+        clearTimeout(pollTimer);
+        pollTimer = null;
+      }
+    }
+
+    function schedulePolling(delay = 1200) {
+      stopPolling();
+      pollTimer = setTimeout(pollStatus, delay);
+    }
+
+    async function pollStatus() {
+      if (!currentTaskId) return;
+      try {
+        const url = `${API_BASE_URL}/kg/extract/status?task_id=${encodeURIComponent(currentTaskId)}&last_index=${logIndex}`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (!data.success || !data.task) {
+          setStatus(`查询失败：${data.message || '未知错误'}`, 'text-rose-600');
+          schedulePolling(1500);
+          return;
+        }
+
+        const task = data.task;
+        appendLogs(task.new_logs || []);
+        logIndex = typeof task.next_index === 'number' ? task.next_index : logIndex;
+
+        if (task.status === 'running' || task.status === 'pending') {
+          setStatus(task.status === 'running' ? '运行中' : '排队中', 'text-amber-600');
+          schedulePolling(1000);
+          return;
+        }
+
+        if (task.status === 'completed') {
+          setStatus('已完成', 'text-emerald-600');
+        } else if (task.status === 'failed') {
+          setStatus(`失败：${task.error || '未知错误'}`, 'text-rose-600');
+        } else if (task.status === 'cancelled') {
+          setStatus('已取消', 'text-slate-600');
+        } else {
+          setStatus(task.status || '未知状态', 'text-slate-700');
+        }
+
+        startBtn.disabled = false;
+        cancelBtn.disabled = true;
+        stopPolling();
+      } catch (err) {
+        setStatus(`轮询异常：${err}`, 'text-rose-600');
+        schedulePolling(1500);
+      }
+    }
+
+    startBtn.addEventListener('click', async () => {
+      stopPolling();
+      currentTaskId = null;
+      logIndex = 0;
+      logOutput.textContent = '';
+
+      const selectedFile = uploadFileInput.files && uploadFileInput.files[0];
+      if (!selectedFile) {
+        setStatus('请先选择上传文件', 'text-rose-600');
+        return;
+      }
+
+      const fileName = String(selectedFile.name || '').toLowerCase();
+      const dotIndex = fileName.lastIndexOf('.');
+      const ext = dotIndex >= 0 ? fileName.slice(dotIndex) : '';
+      if (!ALLOWED_UPLOAD_EXTENSIONS.includes(ext)) {
+        setStatus('文件类型不支持，仅允许 .md/.txt/.pdf/.png/.jpg', 'text-rose-600');
+        return;
+      }
+
+      const form = new FormData();
+      form.append('file', selectedFile);
+      form.append('output_dir', document.getElementById('output-dir').value.trim() || 'csv_generate');
+      form.append('config_path', document.getElementById('config-path').value.trim() || 'config.yaml');
+      form.append('book_name', document.getElementById('book-name').value.trim());
+      form.append('llm_provider', llmProviderSelect.value.trim());
+      form.append('llm_api_key', document.getElementById('llm-api-key').value.trim());
+      form.append('ocr_provider', document.getElementById('ocr-provider').value.trim());
+      form.append('ocr_endpoint', document.getElementById('ocr-endpoint').value.trim());
+      form.append('ocr_api_key', document.getElementById('ocr-api-key').value.trim());
+
+      setStatus('启动中...', 'text-amber-600');
+      startBtn.disabled = true;
+      cancelBtn.disabled = false;
+
+      try {
+        const res = await fetch(`${API_BASE_URL}/kg/extract/start`, { method: 'POST', body: form });
+        const data = await res.json();
+
+        if (!data.success || !data.task_id) {
+          setStatus(`启动失败：${data.message || '未知错误'}`, 'text-rose-600');
+          startBtn.disabled = false;
+          cancelBtn.disabled = true;
+          return;
+        }
+
+        currentTaskId = data.task_id;
+        taskIdBox.classList.remove('hidden');
+        taskIdText.textContent = currentTaskId;
+        setStatus('已启动，等待执行...', 'text-amber-600');
+        schedulePolling(500);
+      } catch (err) {
+        setStatus(`启动异常：${err}`, 'text-rose-600');
+        startBtn.disabled = false;
+        cancelBtn.disabled = true;
+      }
+    });
+
+    cancelBtn.addEventListener('click', async () => {
+      if (!currentTaskId) return;
+      try {
+        const form = new FormData();
+        form.append('task_id', currentTaskId);
+        const res = await fetch(`${API_BASE_URL}/kg/extract/cancel`, { method: 'POST', body: form });
+        const data = await res.json();
+        if (data.success) {
+          setStatus('正在取消...', 'text-slate-600');
+        } else {
+          setStatus(`取消失败：${data.message || '未知错误'}`, 'text-rose-600');
+        }
+      } catch (err) {
+        setStatus(`取消异常：${err}`, 'text-rose-600');
+      }
+    });
+
+    clearLogBtn.addEventListener('click', () => {
+      logOutput.textContent = '';
+      logIndex = 0;
+    });
+
+    document.getElementById('config-path').addEventListener('blur', loadLlmOptions);
+    loadLlmOptions();
+  </script>
+</body>
+</html>

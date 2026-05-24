@@ -1,0 +1,92 @@
+
+    .bg-slate-50 {
+      background-color: #FFFFFF !important;
+    }
+    .text-slate-800, .text-slate-700, .text-slate-600, .text-slate-500 {
+      color: #2c3e4e !important;
+    }
+
+    .text-blue-600 {
+      color: #1E90FF !important;
+    }
+    .border, .border-slate-200, .border-gray-200 {
+      border-color: #B0C4DE !important;
+    }
+    .bg-white {
+      background-color: #FFFFFF;
+      border: 1px solid #B0C4DE;
+      box-shadow: 0 6px 14px rgba(30, 144, 255, 0.05);
+      transition: all 0.2s ease;
+    }
+    .bg-white:hover {
+      border-color: #87CEFA;
+      box-shadow: 0 10px 20px -8px rgba(30, 144, 255, 0.12);
+    }
+    .bg-blue-600 {
+      background-color: #1E90FF !important;
+    }
+    .bg-blue-600:hover {
+      background-color: #6495ED !important;
+      transform: translateY(-1px);
+    }
+    .bg-rose-600 {
+      background-color: #008B8B !important;  
+    }
+    .bg-rose-600:hover {
+      background-color: #5F9EA0 !important;
+    }
+    .bg-slate-600 {
+      background-color: #4682B4 !important;
+    }
+    .bg-slate-600:hover {
+      background-color: #5F9EA0 !important;
+    }
+    input, select, .border, .rounded-lg {
+      border-color: #B0C4DE;
+      transition: 0.2s;
+    }
+    input:focus, select:focus {
+      border-color: #1E90FF !important;
+      box-shadow: 0 0 0 3px rgba(30, 144, 255, 0.15);
+      outline: none;
+    }
+    code {
+      background-color: #F0F8FF;
+      color: #1E90FF;
+      padding: 0.1rem 0.3rem;
+      border-radius: 8px;
+      font-size: 0.85em;
+    }
+    .bg-slate-50, .bg-slate-100, .bg-gray-50 {
+      background-color: #F0F8FF !important;
+    }
+    .bg-slate-900 {
+      background-color: #0f172a !important;
+      border: 1px solid #4682B4;
+    }
+    .text-slate-100 {
+      color: #E0FFFF !important;
+    }
+    #log-output {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 0.75rem;
+      line-height: 1.5;
+    }
+    a.text-blue-600:hover {
+      color: #00BFFF !important;
+      text-decoration: underline;
+    }
+    .text-sm.text-slate-600, .text-xs.text-slate-500 {
+      color: #4682B4 !important;
+    }
+    .font-semibold.text-slate-700 {
+      color: #2c5282 !important;
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+    hr, .border-t {
+      border-color: #E0FFFF;
+    }

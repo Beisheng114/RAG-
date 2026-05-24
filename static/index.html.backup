@@ -1,0 +1,2429 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>船舶故障维修RAG系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <!-- Markdown渲染库 -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- 代码高亮库 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/lib/highlight.min.js"></script>
+    <!-- 知识图谱可视化库 -->
+    <script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.0/dist/vis-network.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/vis-network@9.1.0/dist/vis-network.min.css" rel="stylesheet">
+    <!-- 图表库 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+    <!-- ECharts 可视化库 (运维大屏) -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    <!-- Font Awesome 6.0 (运维大屏图标) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3b82f6',
+                        secondary: '#64748b',
+                        dark: '#1e293b',
+                        light: '#f8fafc'
+                    }
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .scrollbar-hide {
+                -ms-overflow-style: none;
+                scrollbar-width: none;
+            }
+            .scrollbar-hide::-webkit-scrollbar {
+                display: none;
+            }
+        }
+        
+        /* Markdown样式 */
+        .prose {
+            line-height: 1.6;
+        }
+        .prose h1, .prose h2, .prose h3, .prose h4 {
+            font-weight: 600;
+            margin-top: 1em;
+            margin-bottom: 0.5em;
+        }
+        .prose h1 { font-size: 1.5em; }
+        .prose h2 { font-size: 1.3em; }
+        .prose h3 { font-size: 1.1em; }
+        .prose p { margin: 0.5em 0; }
+        .prose ul, .prose ol {
+            margin: 0.5em 0;
+            padding-left: 1.5em;
+        }
+        .prose li { margin: 0.25em 0; }
+        .prose code {
+            background-color: #f3f4f6;
+            padding: 0.2em 0.4em;
+            border-radius: 3px;
+            font-size: 0.9em;
+        }
+        .prose pre {
+            background-color: #f6f8fa;
+            padding: 1em;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin: 0.5em 0;
+        }
+        .prose pre code {
+            background-color: transparent;
+            padding: 0;
+        }
+        .prose blockquote {
+            border-left: 4px solid #d1d5db;
+            padding-left: 1em;
+            margin: 0.5em 0;
+            color: #6b7280;
+        }
+        .prose table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 0.5em 0;
+        }
+        .prose th, .prose td {
+            border: 1px solid #d1d5db;
+            padding: 0.5em;
+        }
+        .prose th {
+            background-color: #f9fafb;
+        }
+        .prose a {
+            color: #3b82f6;
+            text-decoration: underline;
+        }
+        .prose strong {
+            font-weight: 600;
+        }
+        .prose em {
+            font-style: italic;
+        }
+        
+        /* 加载动画 */
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .animate-spin {
+            animation: spin 1s linear infinite;
+        }
+        
+        .search-mode-label {
+            transition: all 0.2s ease;
+        }
+        
+        .search-mode-label:has(input:checked) {
+            background-color: #3b82f6;
+            border-color: #3b82f6;
+            color: white;
+        }
+        
+        .search-mode-label:has(input:checked):hover {
+            background-color: #2563eb;
+        }
+        
+        /* 导出菜单样式 */
+        #export-menu {
+            transition: opacity 0.2s ease, visibility 0.2s ease;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            min-width: 100px;
+        }
+        
+        #export-menu-container:hover #export-menu {
+            opacity: 1;
+            visibility: visible;
+        }
+        
+        #export-menu > div {
+            padding: 8px 12px;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+    </style>
+
+    <link rel="stylesheet" type="text/css" href="index.css">
+</head>
+<body class="bg-gray-50 text-gray-900 font-sans">
+<div class="app-layout">
+    <!-- 左侧导航栏 -->
+    <div class="nav-sidebar">
+        <!-- 头部区域 -->
+        <div class="sidebar-header">
+            <div class="system-title">
+                <i class="fa fa-anchor"></i>
+                <span>船舶故障维修RAG系统</span>
+            </div>
+            <div class="status-bar">
+                <div class="connection-badge">
+                    <span id="connection-status" class="status-dot"></span>
+                    <span class="status-text" id="connection-text">连接中</span>
+                </div>
+                <div class="conv-count">
+                    <span id="conversation-count">0</span> 个对话
+                </div>
+            </div>
+        </div>
+
+        <div class="nav-menu">
+            <button id="nav-chat" class="nav-item active">
+                <i class="fa fa-comments-o"></i>
+                <span>对话</span>
+            </button>
+            <button id="nav-visualize" class="nav-item">
+                <i class="fa fa-sitemap"></i>
+                <span>知识图谱</span>
+            </button>
+            <button id="nav-import" class="nav-item">
+                <i class="fa fa-upload"></i>
+                <span>导入对话</span>
+            </button>
+            <button id="nav-material" class="nav-item">
+                <i class="fa fa-file-text-o"></i>
+                <span>资料导入</span>
+            </button>
+            <button id="nav-operationsData" class="nav-item">
+                <i class="fa fa-server"></i>
+                <span>系统运维</span>
+            </button>
+        </div>
+
+        <!-- 新建对话按钮 -->
+        <div class="new-conv-wrapper">
+            <button id="new-conversation-btn" class="btn-new-conv">
+                <i class="fa fa-plus"></i>
+                <span>新建对话</span>
+            </button>
+        </div>
+
+        <!-- 对话列表 -->
+        <div id="conversation-list" class="conversation-list">
+            <div class="empty-list">
+                <i class="fa fa-commenting-o"></i>
+                <p>暂无对话记录<br>点击「新建对话」开始</p>
+            </div>
+        </div>
+    </div>
+        
+        <!-- 右侧内容区域 -->
+        <div class="flex-1 flex flex-col bg-gray-50">
+            <!-- 内容头部 -->
+            <div class="right-header">
+                <h2 id="content-title" style="font-size: 1.125rem; font-weight: 600; color: #1E90FF;">选择一个对话</h2>
+                <div class="flex space-x-2">
+                    <div id="export-menu-container" class="relative hidden">
+                        <button id="export-conversation" class="text-secondary hover:text-primary transition-colors p-2 rounded-full">
+                            <i class="fa fa-download"></i>
+                        </button>
+                        <div id="export-menu" class="absolute right-full top-0 mr-2 bg-white rounded-lg border border-gray-200 shadow-lg py-1">
+                            <div id="export-word" class="px-3 text-gray-700 hover:bg-blue-50 cursor-pointer">
+                                导出 Word
+                            </div>
+                            <div id="export-json" class="px-3 text-gray-700 hover:bg-blue-50 cursor-pointer">
+                                导出 JSON
+                            </div>
+                            <div id="export-md" class="px-3 text-gray-700 hover:bg-blue-50 cursor-pointer">
+                                导出 MD
+                            </div>
+                        </div>
+                    </div>
+                    <button id="delete-conversation" class="text-red-500 hover:text-red-600 transition-colors p-2 rounded-full hidden">
+                        <i class="fa fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 对话消息 -->
+            <div id="chat-content" class="flex-1 overflow-y-auto p-4 space-y-4">
+                <!-- 消息将通过JavaScript动态添加 -->
+                <div class="flex justify-center items-center h-full text-gray-400">
+                    <div class="text-center">
+                        <i class="fa fa-comments-o text-4xl mb-2"></i>
+                        <p>选择或创建一个对话开始</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 导入对话内容 -->
+            <div id="import-content">
+        <div class="max-w-2xl mx-auto">
+            <h3 class="import-title">导入对话</h3>
+            <div class="import-card">
+                <!-- 文件上传 -->
+                <div class="form-group">
+                    <label class="form-label">上传对话文件</label>
+                    <input
+                        type="file"
+                        id="import-file"
+                        accept=".json"
+                        class="file-input"
+                    >
+                </div>
+
+                <!-- 对话标题输入 -->
+                <div class="form-group">
+                    <label class="form-label">对话标题</label>
+                    <input
+                        type="text"
+                        id="import-title"
+                        class="text-input"
+                        placeholder="输入对话标题"
+                    >
+                </div>
+
+                <!-- 按钮组 -->
+                <div class="button-group">
+                    <button id="cancel-import" class="btn-cancel-import">
+                        取消
+                    </button>
+                    <button id="confirm-import" class="btn-confirm-import">
+                        导入
+                    </button>
+                </div>
+
+                <!-- 提示信息区域 -->
+                <div id="import-message" class="hidden"></div>
+            </div>
+        </div>
+    </div>
+            
+            <!-- 资料导入内容 -->
+    <div id="material-content">
+        <div class="max-w-4xl mx-auto">
+            <h3 class="material-title">资料导入</h3>
+            <div class="material-card">
+                <!-- 案例文本输入区 -->
+                <div>
+                    <label class="form-label">案例文本</label>
+                    <textarea
+                        id="material-text"
+                        class="material-textarea"
+                        rows="12"
+                        placeholder="请输入案例文本，包括船舶装备、装备零部件、故障、故障现象、故障原因、维修步骤、注意事项等信息..."
+                    ></textarea>
+                </div>
+
+                <!-- 按钮组 -->
+                <div class="button-group">
+                    <button id="cancel-material" class="btn-cancel-material">
+                        取消
+                    </button>
+                    <button id="preview-material" class="btn-preview-material">
+                        预览
+                    </button>
+                    <button id="confirm-material" class="btn-confirm-material">
+                        导入资料
+                    </button>
+                </div>
+
+                <!-- 预览区域 -->
+                <div id="material-preview" class="info-container hidden">
+                    <div class="info-box">
+                        <div class="info-title"> 预览结果</div>
+                        <div id="material-preview-content" class="info-content">
+                            <!-- 预览结果将通过JavaScript动态添加 -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 导入结果区域 -->
+                <div id="material-result" class="info-container hidden">
+                    <div class="info-box">
+                        <div class="info-title">导入结果</div>
+                        <div id="material-result-content" class="info-content">
+                            <!-- 结果将通过JavaScript动态添加 -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+            
+            <!-- 知识图谱可视化内容 -->
+            <div id="visualize-content" class="flex-1 overflow-hidden hidden">
+                <div class="app-container">
+    <!-- 左侧美化面板 浅蓝基调 -->
+    <div class="query-panel">
+        <div class="panel-content">
+            <div class="panel-title">
+                <span>知识图谱探索</span>
+            </div>
+
+            <!-- 查询区 -->
+            <div class="form-row">
+  <div>
+    <label class="label-light">关键词</label>
+  </div>
+  <div>
+    <input type="text" id="graph-query" class="input-modern" placeholder="例如: 电机故障 / 安全阀 ...">
+  </div>
+</div>
+
+<div class="form-row">
+  <div>
+    <label class="label-light">实体类型</label>
+  </div>
+  <div class="custom-select-wrapper">
+    <!-- 自定义触发器，保持 select-modern 样式风格 -->
+    <div class="select-modern custom-select-trigger">
+      <span>所有类型</span>
+      <i class="arrow-icon"></i>
+    </div>
+    <!-- 自定义选项面板 -->
+    <div class="custom-select-options">
+      <div data-value="all" class="option-item selected">所有类型</div>
+      <div data-value="Equipment" class="option-item">设备</div>
+      <div data-value="Component" class="option-item">部件</div>
+      <div data-value="Fault" class="option-item">故障</div>
+      <div data-value="FaultReason" class="option-item">故障原因</div>
+      <div data-value="MaintenanceAction" class="option-item">维修措施</div>
+      <div data-value="SafetyNotice" class="option-item">安全注意事项</div>
+      <div data-value="KnowledgeSource" class="option-item">知识来源</div>
+    </div>
+    <!-- 隐藏原生select，用于表单提交 -->
+    <select id="entity-type" class="hidden-select" >
+      <option value="all">所有类型</option>
+      <option value="Equipment">设备</option>
+      <option value="Component">部件</option>
+      <option value="Fault">故障</option>
+      <option value="FaultReason">故障原因</option>
+      <option value="MaintenanceAction">维修措施</option>
+      <option value="SafetyNotice">安全注意事项</option>
+      <option value="KnowledgeSource">知识来源</option>
+    </select>
+  </div>
+</div>
+
+            <button id="execute-query" class="btn-primary">
+                执行查询
+            </button>
+
+            <!-- 节点限制滑块 -->
+            <div style="margin: 1.5rem 0 0.5rem;">
+                <div class="label-light">节点数量限制 <span class="limit-value" id="node-limit-value">200</span></div>
+                <input type="range" id="node-limit" min="50" max="350" value="200" class="slider-custom">
+                <div class="flex justify-between text-xs" style="display: flex; justify-content: space-between; font-size: 0.7rem; color:#6f9cbd; margin-top: 4px;">
+                    <span>50</span>
+                    <span>推荐 ≤ 250</span>
+                    <span>350</span>
+                </div>
+                <p class="text-xs" style="text-align: center; font-size: 0.7rem; color:#F39C12; margin-top: 8px; background:#FFF7E8; border-radius: 30px; padding: 4px 10px;">
+                    超过350节点可能影响性能，请按需调节
+                </p>
+            </div>
+
+            <div style="display: flex; gap: 12px; margin-top: 12px;">
+                <button id="show-all" class="btn-secondary">
+                    显示全部
+                </button>
+                <button id="load-more" class="btn-secondary hidden">
+                    加载更多
+                </button>
+            </div>
+
+            <!-- 统计模块 节点类型总数 & 当前显示统计 & 饼图 -->
+            <div class="stats-card">
+                <div class="stats-header">
+                    <h4>节点类型总数</h4>
+                    <button id="refresh-counts" class="refresh-btn"><i class="fas fa-sync-alt"></i> 刷新</button>
+                </div>
+                <div id="node-type-counts" class="stat-list">
+                    <!-- 动态内容展示全量节点统计 -->
+                    <div style="text-align:center; color:#9cb9d0;">加载统计中...</div>
+                </div>
+                <hr>
+                <div class="stats-header">
+                    <h4>当前图谱显示统计</h4>
+                </div>
+                <div id="graph-stats" class="graph-stats-block">
+                    <!-- 统计信息将通过JavaScript动态添加 -->
+                </div>
+                <div class="stats-header">
+                    <h4>节点类型分布</h4>
+                </div>
+                <div class="chart-wrapper">
+                    <canvas id="nodeTypeChart" width="300" style="width: 100%;"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 右侧图谱展示 -->
+                    <div class="graph-area">
+        <div class="graph-card">
+            <div id="graph-container" style="width:100%; height:100%;">
+                <div class="graph-placeholder">
+                   <p>点击「显示全部」或执行查询，展示知识图谱</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+            </div>
+            <!-- 系统运维内容 -->
+            <div id="operationsData-content" class="flex-1 hidden" style="overflow: hidden;">
+                <div class="dashboard" style="overflow-y: auto; height: 100%; padding-right: 10px;">
+                    <!-- 三栏布局：左侧 + 中央 + 右侧 -->
+                    <div class="dashboard-grid">
+                        <!-- 左侧栏：知识图谱概览 + 知识资产概览 -->
+                        <div class="dashboard-left">
+                            <!-- 1. 知识图谱概览卡片 -->
+                            <div class="card full-width mb-4">
+                                <div class="card-header">
+                                    <i class="fas fa-project-diagram"></i>
+                                    <h2>知识图谱概览</h2>
+                                </div>
+                                <div class="card-body">
+                                    <div class="stats-row">
+                                        <div class="stat-item">
+                                            <div class="stat-number" id="totalEntities">--</div>
+                                            <div class="stat-label">实体总数</div>
+                                        </div>
+                                        <div class="stat-item">
+                                            <div class="stat-number" id="totalRelations">--</div>
+                                            <div class="stat-label">关系总数</div>
+                                        </div>
+                                    </div>
+                                    <div class="sub-section">
+                                        <div class="sub-title"><i class="fas fa-tags"></i> 实体分类统计</div>
+                                        <div id="entityCategoryChart" class="chart-container" style="height: 220px;"></div>
+                                    </div>
+                                    <div class="sub-section">
+                                        <div class="sub-title"><i class="fas fa-share-alt"></i> 关系类型分布</div>
+                                        <div id="relationTypeChart" class="chart-container" style="height: 220px;"></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 4. 知识资产概览 -->
+                            <div class="card full-width">
+                                <div class="card-header">
+                                    <i class="fas fa-database"></i>
+                                    <h2>知识资产概览</h2>
+                                </div>
+                                <div class="card-body">
+                                    <div class="stats-row">
+                                        <div class="stat-item">
+                                            <div class="stat-number" id="docTotal">--</div>
+                                            <div class="stat-label">知识文档总数</div>
+                                        </div>
+                                        <div class="stat-item">
+                                            <div class="stat-number" id="updateFreq">--</div>
+                                            <div class="stat-label">近 30 天更新频率 (次/周)</div>
+                                        </div>
+                                    </div>
+                                    <div class="sub-section">
+                                        <div class="sub-title"><i class="fas fa-microchip"></i> 各装备知识覆盖率</div>
+                                        <div id="coverageChart" class="chart-container" style="height: 230px;"></div>
+                                    </div>
+                                    <div class="sub-section">
+                                        <div class="sub-title"><i class="fas fa-chart-simple"></i> 知识引用热度 TOP5</div>
+                                        <div id="hotKnowledgeChart" class="chart-container" style="height: 220px;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 中央主体：问答系统监控 -->
+                        <div class="dashboard-center">
+                            <!-- 3. 问答系统监控 -->
+                            <div class="card full-width">
+                                <div class="card-header">
+                                    <i class="fas fa-comments"></i>
+                                    <h2>问答系统监控</h2>
+                                </div>
+                                <div class="card-body">
+                                    <div class="stats-row">
+                                        <div class="stat-item">
+                                            <div class="stat-number" id="accuracyRate">--</div>
+                                            <div class="stat-label">当前问答准确率</div>
+                                        </div>
+                                        <div class="stat-item">
+                                            <div class="stat-number" id="avgRespTime">--</div>
+                                            <div class="stat-label">平均响应时间 (ms)</div>
+                                        </div>
+                                    </div>
+                                    <div class="sub-section">
+                                        <div class="sub-title"><i class="fas fa-chart-line"></i> 问答准确率趋势 (近 7 周)</div>
+                                        <div id="accuracyTrendChart" class="chart-container" style="height: 210px;"></div>
+                                    </div>
+                                    <div style="display: flex; flex-wrap: wrap; gap: 24px; margin-top: 16px;">
+                                        <div style="flex: 1; min-width: 200px;">
+                                            <div class="sub-title"><i class="fas fa-fire"></i> 热门问题 TOP10</div>
+                                            <ul id="hotQuestionsList" class="trend-list"></ul>
+                                        </div>
+                                        <div style="flex: 1; min-width: 200px;">
+                                            <div class="sub-title"><i class="fas fa-question-circle"></i> 无答案问题统计（待补充）</div>
+                                            <ul id="noAnswerList" class="noanswer-list"></ul>
+                                            <div class="badge-blue" style="margin-top: 12px; display: inline-block;">共 <span id="noAnswerCount">0</span> 条待补充知识</div>
+                                        </div>
+                                    </div>
+                                    <div class="sub-section">
+                                        <div class="sub-title"><i class="fas fa-tachometer-alt"></i> 响应时间分布 (毫秒区间)</div>
+                                        <div id="responseTimeChart" class="chart-container" style="height: 200px;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 右侧栏：故障分析仪表盘 -->
+                        <div class="dashboard-right">
+                            <!-- 2. 故障分析仪表盘 -->
+                            <div class="card full-width">
+                                <div class="card-header">
+                                    <i class="fas fa-chart-line"></i>
+                                    <h2>故障分析仪表盘</h2>
+                                </div>
+                                <div class="card-body">
+                                    <div style="display: flex; flex-wrap: wrap; gap: 20px;">
+                                        <div style="flex: 1.2; min-width: 200px;">
+                                            <div class="sub-title"><i class="fas fa-list-ol"></i> 高频故障 TOP10</div>
+                                            <div id="faultTopList" style="max-height: 260px; overflow-y: auto; padding-right: 6px;">
+                                                <!-- 动态列表 -->
+                                            </div>
+                                        </div>
+                                        <div style="flex: 1; min-width: 150px;">
+                                            <div class="sub-title"><i class="fas fa-chart-pie"></i> 故障装备分布（四机一炉占比）</div>
+                                            <div id="equipmentPieChart" class="small-chart" style="height: 210px;"></div>
+                                        </div>
+                                    </div>
+                                    <div class="sub-section">
+                                        <div class="sub-title"><i class="fas fa-chart-bar"></i> 故障原因分析（鱼骨图等效饼图）</div>
+                                        <div id="faultCauseChart" class="chart-container" style="height: 220px;"></div>
+                                    </div>
+                                    <div class="sub-section">
+                                        <div class="sub-title"><i class="fas fa-clock"></i> 维修方案时效性统计（平均处理时长/时效等级）</div>
+                                        <div id="timelinessChart" class="chart-container" style="height: 220px;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 输入区域 -->
+            <div id="chat-input-area">
+            <div class="search-mode-section">
+<!--                <label class="section-label">搜索方式</label>-->
+                <div class="search-mode-group">
+                    <label class="search-mode-label" data-mode="intelligent">
+                        <input type="radio" name="search-mode" value="intelligent" checked>
+                        <span>智能路由</span>
+                    </label>
+                    <label class="search-mode-label" data-mode="traditional">
+                        <input type="radio" name="search-mode" value="traditional">
+                        <span>传统双搜索</span>
+                    </label>
+                    <label class="search-mode-label" data-mode="graph">
+                        <input type="radio" name="search-mode" value="graph">
+                        <span>图搜索</span>
+                    </label>
+                    <label class="search-mode-label" data-mode="combined">
+                        <input type="radio" name="search-mode" value="combined">
+                        <span>组合搜索</span>
+                    </label>
+                </div>
+            </div>
+            <form id="message-form" class="message-form">
+                <input
+                    type="text"
+                    id="message-input"
+                    placeholder="输入您的问题..."
+                    autocomplete="off"
+                >
+                <button type="submit" class="send-btn">
+                    发送
+                </button>
+            </form>
+        </div>
+    
+    <!-- 新对话模态框 -->
+    <div id="new-conversation-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden modal-overlay">
+        <div class="modal-container">
+            <!-- 头部区域 -->
+            <div class="modal-header">
+                <h3 class="modal-title">创建新对话</h3>
+            </div>
+
+            <!-- 主体区域: 输入框及标签 -->
+            <div class="modal-body">
+                <label class="input-label" for="conversation-title-input"></label>
+                <input
+                    type="text"
+                    id="conversation-title-input"
+                    class="blue-input"
+                    placeholder="请输入新对话标题"
+                    autocomplete="off"
+                >
+            </div>
+
+            <!-- 按钮组 -->
+            <div class="modal-actions">
+                <button id="cancel-new-conversation" class="btn-cancel">取消</button>
+                <button id="confirm-new-conversation" class="btn-create">创建</button>
+            </div>
+        </div>
+    </div>
+        </div>
+</div>
+    <script>
+    // 自定义下拉框功能
+    function initCustomSelects() {
+        const customSelectWrappers = document.querySelectorAll('.custom-select-wrapper');
+
+        customSelectWrappers.forEach(wrapper => {
+            const trigger = wrapper.querySelector('.custom-select-trigger');
+            const optionsPanel = wrapper.querySelector('.custom-select-options');
+            const hiddenSelect = wrapper.querySelector('.hidden-select');
+            const triggerSpan = trigger.querySelector('span');
+
+            // 点击触发器
+            trigger.addEventListener('click', function(e) {
+                e.stopPropagation();
+
+                // 关闭其他下拉框
+                document.querySelectorAll('.custom-select-options.show').forEach(panel => {
+                    if (panel !== optionsPanel) {
+                        panel.classList.remove('show');
+                        panel.previousElementSibling?.classList.remove('open');
+                    }
+                });
+
+                // 切换当前下拉框
+                optionsPanel.classList.toggle('show');
+                trigger.classList.toggle('open');
+            });
+
+            // 选项点击
+            wrapper.querySelectorAll('.option-item').forEach(option => {
+                option.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    const value = this.dataset.value;
+                    const text = this.textContent;
+
+                    // 更新显示
+                    triggerSpan.textContent = text;
+
+                    // 更新隐藏select
+                    if (hiddenSelect) {
+                        hiddenSelect.value = value;
+                        hiddenSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+
+                    // 更新选中样式
+                    wrapper.querySelectorAll('.option-item').forEach(opt => opt.classList.remove('selected'));
+                    this.classList.add('selected');
+
+                    // 关闭下拉框
+                    optionsPanel.classList.remove('show');
+                    trigger.classList.remove('open');
+                });
+            });
+        });
+    }
+
+    // 点击其他地方关闭
+    document.addEventListener('click', function() {
+        document.querySelectorAll('.custom-select-options.show').forEach(panel => {
+            panel.classList.remove('show');
+            panel.previousElementSibling?.classList.remove('open');
+        });
+    });
+
+    // 初始化
+    document.addEventListener('DOMContentLoaded', function() {
+        initCustomSelects();
+
+        // 设置默认值
+        document.querySelectorAll('.custom-select-wrapper').forEach(wrapper => {
+            const hiddenSelect = wrapper.querySelector('.hidden-select');
+            const triggerSpan = wrapper.querySelector('.custom-select-trigger span');
+            const options = wrapper.querySelectorAll('.option-item');
+
+            if (hiddenSelect && hiddenSelect.value) {
+                const selectedOption = Array.from(options).find(opt => opt.dataset.value === hiddenSelect.value);
+                if (selectedOption) {
+                    triggerSpan.textContent = selectedOption.textContent;
+                    selectedOption.classList.add('selected');
+                }
+            }
+        });
+    });
+</script>
+    <script>
+        // 全局变量
+        let currentConversationId = null;
+        let network = null;
+        let currentGraph = null;
+        
+        // API基础URL
+        const API_BASE_URL = 'http://localhost:8002/api';
+        
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            loadConversations();
+            updateConversationCount();
+            setupEventListeners();
+        });
+        
+        // 更新连接状态
+        function updateConnectionStatus(connected) {
+            const statusElement = document.getElementById('connection-status');
+            const textElement = document.getElementById('connection-text');
+            if (connected) {
+                statusElement.className = 'w-2 h-2 rounded-full bg-green-500';
+                statusElement.title = '已连接';
+                if (textElement) textElement.textContent = '已连接';
+            } else {
+                statusElement.className = 'w-2 h-2 rounded-full bg-red-500';
+                statusElement.title = '未连接';
+                if (textElement) textElement.textContent = '未连接';
+            }
+        }
+        
+        // 更新对话数量
+        async function updateConversationCount() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/system/stats`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                document.getElementById('conversation-count').textContent = `对话数量: ${data.conversation_count}`;
+                updateConnectionStatus(true);
+            } catch (error) {
+                console.error('获取对话数量失败:', error);
+                document.getElementById('conversation-count').textContent = '对话数量: -';
+                updateConnectionStatus(false);
+                showError('无法连接到后端服务，请确保服务已启动 (端口: 8002)');
+            }
+        }
+        
+        // 显示错误信息
+        function showError(message) {
+            const chatContent = document.getElementById('chat-content');
+            chatContent.innerHTML = `
+                <div class="flex justify-center items-center h-full text-red-500">
+                    <div class="text-center p-4 bg-red-50 rounded-lg border border-red-200">
+                        <i class="fa fa-exclamation-triangle text-3xl mb-2"></i>
+                        <p>${message}</p>
+                        <p class="text-sm mt-2">请检查:</p>
+                        <ul class="text-sm text-left mt-1">
+                            <li>1. 后端服务是否已启动</li>
+                            <li>2. 访问的端口是否正确 (8002)</li>
+                            <li>3. 网络连接是否正常</li>
+                        </ul>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // 加载对话列表
+        async function loadConversations() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/conversations`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                
+                const conversationList = document.getElementById('conversation-list');
+                conversationList.innerHTML = '';
+                
+                if (!data.conversations || data.conversations.length === 0) {
+                    conversationList.innerHTML = `
+                        <div class="text-center text-gray-400 p-4">
+                            <i class="fa fa-comment-o text-2xl mb-2"></i>
+                            <p>暂无对话</p>
+                            <p class="text-xs">点击"新对话"开始</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                // 按更新时间排序，最新的在前面
+                data.conversations.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+                
+                data.conversations.forEach(conversation => {
+                    const conversationItem = document.createElement('div');
+                    conversationItem.className = `p-3 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors ${currentConversationId === conversation.id ? 'bg-blue-50 border-l-4 border-primary' : ''}`;
+                    conversationItem.dataset.id = conversation.id;
+                    
+                    const time = new Date(conversation.updated_at).toLocaleString('zh-CN', {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                    
+                    conversationItem.innerHTML = `
+                        <div class="flex justify-between items-center mb-1">
+                            <h3 class="font-medium text-sm truncate flex-1 min-w-0">${conversation.title}</h3>
+                            <span class="text-xs text-gray-500 ml-2 whitespace-nowrap">${time}</span>
+                        </div>
+                        <p class="text-xs text-gray-500 truncate">
+                            ${conversation.messages.length > 0 ? conversation.messages[conversation.messages.length - 1].content : '无消息'}
+                        </p>
+                    `;
+                    
+                    conversationItem.addEventListener('click', () => {
+                        selectConversation(conversation.id);
+                    });
+                    
+                    conversationList.appendChild(conversationItem);
+                });
+            } catch (error) {
+                console.error('加载对话失败:', error);
+            }
+        }
+        
+        // 选择对话
+        async function selectConversation(conversationId) {
+            try {
+                const response = await fetch(`${API_BASE_URL}/conversations/${conversationId}`);
+                const conversation = await response.json();
+                
+                currentConversationId = conversationId;
+                
+                // 更新对话标题
+                document.getElementById('content-title').textContent = conversation.title;
+                
+                // 显示聊天内容
+                showChatContent();
+                
+                // 更新消息容器
+                const chatContent = document.getElementById('chat-content');
+                chatContent.innerHTML = '';
+                
+                if (conversation.messages.length === 0) {
+                    chatContent.innerHTML = `
+                        <div class="flex justify-center items-center h-full text-gray-400">
+                            <p>开始您的第一个问题</p>
+                        </div>
+                    `;
+                } else {
+                    conversation.messages.forEach(message => {
+                        // 助手消息使用Markdown渲染
+                        const isMarkdown = message.role === 'assistant';
+                        addMessageToContainer(message.role, message.content, message.timestamp, isMarkdown);
+                    });
+                    
+                    // 滚动到底部
+                    chatContent.scrollTop = chatContent.scrollHeight;
+                }
+                
+                // 显示导出和删除按钮
+                document.getElementById('export-menu-container').classList.remove('hidden');
+                document.getElementById('delete-conversation').classList.remove('hidden');
+                
+                // 更新对话列表的选中状态
+                loadConversations();
+            } catch (error) {
+                console.error('加载对话失败:', error);
+            }
+        }
+        
+        // 添加消息到容器
+        function addMessageToContainer(role, content, timestamp, isMarkdown = false) {
+            const chatContent = document.getElementById('chat-content');
+            const messageDiv = document.createElement('div');
+            
+            const time = new Date(timestamp).toLocaleString('zh-CN', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            
+            if (role === 'user') {
+                messageDiv.className = 'flex justify-end';
+                messageDiv.innerHTML = `
+                    <div class="quest-content">
+                      <div class="quest-text-wrapper">
+                      <p class="quest-text">${content}</p>
+                      </div>
+                        <div class="quest-time">${time}</div>
+                    </div>
+                `;
+            } else {
+                messageDiv.className = 'flex';
+                const displayContent = isMarkdown ? marked.parse(content) : content;
+                messageDiv.innerHTML = `
+                    <div class="max-w-[80%] bg-white rounded-lg p-4 shadow-sm border border-gray-100">
+                        <div class="text-sm prose prose-sm max-w-none">${displayContent}</div>
+                        <p class="text-xs text-gray-500 mt-1 text-right">${time}</p>
+                    </div>
+                `;
+                // 高亮代码块
+                messageDiv.querySelectorAll('pre code').forEach((block) => {
+                    hljs.highlightElement(block);
+                });
+            }
+            
+            chatContent.appendChild(messageDiv);
+            return messageDiv;
+        }
+        
+        // 添加正在回答的加载样式
+        function addLoadingMessage() {
+            const chatContent = document.getElementById('chat-content');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'flex';
+            messageDiv.id = 'loading-message';
+            messageDiv.innerHTML = `
+                <div class="max-w-[80%] bg-white rounded-lg p-4 shadow-sm border border-gray-100">
+                    <div class="flex items-center space-x-2">
+                        <div class="flex space-x-1">
+                            <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0ms;"></div>
+                            <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 150ms;"></div>
+                            <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 300ms;"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            chatContent.appendChild(messageDiv);
+            chatContent.scrollTop = chatContent.scrollHeight;
+            return messageDiv;
+        }
+
+        // 移除正在回答的加载样式
+        function removeLoadingMessage() {
+            const loadingMessage = document.getElementById('loading-message');
+            if (loadingMessage) {
+                loadingMessage.remove();
+            }
+        }
+        
+        // 发送消息
+        async function sendMessage() {
+            const messageInput = document.getElementById('message-input');
+            const message = messageInput.value.trim();
+            
+            if (!message) return;
+            
+            const searchMode = document.querySelector('input[name="search-mode"]:checked').value;
+            
+            messageInput.value = '';
+            
+            const tempTimestamp = new Date().toISOString();
+            addMessageToContainer('user', message, tempTimestamp);
+            
+            // 添加正在回答的加载样式
+            addLoadingMessage();
+            
+            const chatContent = document.getElementById('chat-content');
+            chatContent.scrollTop = chatContent.scrollHeight;
+            
+            let isFirstChunk = true;
+            let assistantMessageDiv = null;
+            let contentDiv = null;
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/query/stream`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        conversation_id: currentConversationId,
+                        message: message,
+                        search_mode: searchMode
+                    })
+                });
+                
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let fullContent = '';
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+                    
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = JSON.parse(line.slice(6));
+                            
+                            if (data.done) {
+                                // 流式输出完成
+                                currentConversationId = data.conversation_id;
+                                // 更新对话列表和数量
+                                loadConversations();
+                                updateConversationCount();
+                                // 更新内容标题
+                                document.getElementById('content-title').textContent = '对话';
+                                // 显示导出和删除按钮
+                                document.getElementById('export-menu-container').classList.remove('hidden');
+                                document.getElementById('delete-conversation').classList.remove('hidden');
+                            } else if (data.content) {
+                                // 收到第一个内容块时，移除加载样式并创建助手消息
+                                if (isFirstChunk) {
+                                    removeLoadingMessage();
+                                    assistantMessageDiv = addMessageToContainer('assistant', '', tempTimestamp, false);
+                                    contentDiv = assistantMessageDiv.querySelector('.prose');
+                                    isFirstChunk = false;
+                                }
+                                
+                                // 添加内容
+                                fullContent += data.content;
+                                // 实时渲染 Markdown
+                                contentDiv.innerHTML = marked.parse(fullContent);
+                                // 高亮代码块
+                                assistantMessageDiv.querySelectorAll('pre code').forEach((block) => {
+                                    hljs.highlightElement(block);
+                                });
+                                // 滚动到底部
+                                chatContent.scrollTop = chatContent.scrollHeight;
+                            }
+                        }
+                    }
+                }
+                
+                // 如果流式输出完成但没有收到任何内容（异常情况），移除加载样式
+                if (isFirstChunk) {
+                    removeLoadingMessage();
+                }
+            } catch (error) {
+                console.error('发送消息失败:', error);
+                // 移除加载样式
+                removeLoadingMessage();
+                // 显示错误消息
+                if (!assistantMessageDiv) {
+                    assistantMessageDiv = addMessageToContainer('assistant', '', tempTimestamp, false);
+                    contentDiv = assistantMessageDiv.querySelector('.prose');
+                }
+                contentDiv.innerHTML = marked.parse('抱歉，处理您的请求时出现错误。');
+            }
+        }
+        
+        // 导出对话为 JSON
+        async function exportConversation() {
+            if (!currentConversationId) return;
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/export/${currentConversationId}`);
+                const data = await response.json();
+                
+                if (data.success && data.url) {
+                    // 创建下载链接
+                    const link = document.createElement('a');
+                    link.href = data.url;
+                    link.download = `conversation_${currentConversationId}.json`;
+                    link.click();
+                }
+            } catch (error) {
+                console.error('导出对话失败:', error);
+            }
+        }
+
+        // 导出对话为 Markdown
+        async function exportConversationToMD() {
+            if (!currentConversationId) return;
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/export-md/${currentConversationId}`);
+                const data = await response.json();
+
+                if (data.success && data.url) {
+                    const link = document.createElement('a');
+                    link.href = data.url;
+                    link.download = `conversation_${currentConversationId}.md`;
+                    link.click();
+                }
+            } catch (error) {
+                console.error('导出 MD 失败:', error);
+                alert('导出 MD 失败：' + (error.message || '未知错误'));
+            }
+        }
+        
+        // 导出对话为 Word
+        async function exportConversationToWord() {
+            if (!currentConversationId) return;
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/conversations/${currentConversationId}`);
+                const conversation = await response.json();
+                
+                // 创建 Word 文档内容（使用 HTML 格式）
+                let wordContent = `
+                    <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
+                    <head>
+                        <meta charset='UTF-8'>
+                        <style>
+                            body { font-family: 'Microsoft YaHei', Arial, sans-serif; }
+                            h1 { color: #3b82f6; border-bottom: 2px solid #3b82f6; padding-bottom: 10px; }
+                            .message { margin: 15px 0; padding: 10px; border-radius: 5px; }
+                            .user { background-color: #e3f2fd; border-left: 4px solid #3b82f6; }
+                            .assistant { background-color: #f5f5f5; border-left: 4px solid #10b981; }
+                            .timestamp { color: #666; font-size: 12px; margin-top: 5px; }
+                            table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+                            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                            th { background-color: #f2f2f2; }
+                        </style>
+                    </head>
+                    <body>
+                        <h1>${conversation.title}</h1>
+                        <p><strong>导出时间:</strong> ${new Date().toLocaleString('zh-CN')}</p>
+                        <hr/>
+                `;
+                
+                conversation.messages.forEach(message => {
+                    const time = new Date(message.timestamp).toLocaleString('zh-CN', {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                    
+                    const roleText = message.role === 'user' ? '用户' : '助手';
+                    const roleClass = message.role === 'user' ? 'user' : 'assistant';
+                    
+                    wordContent += `
+                        <div class="message ${roleClass}">
+                            <strong>${roleText}</strong>
+                            <div>${message.content.replace(/\n/g, '<br>')}</div>
+                            <div class="timestamp">${time}</div>
+                        </div>
+                    `;
+                });
+                
+                wordContent += `
+                    </body>
+                    </html>
+                `;
+                
+                // 创建 Blob 并下载
+                const blob = new Blob(['\ufeff', wordContent], {
+                    type: 'application/msword'
+                });
+                
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = `${conversation.title}.doc`;
+                link.click();
+                
+                URL.revokeObjectURL(link.href);
+            } catch (error) {
+                console.error('导出 Word 失败:', error);
+                alert('导出 Word 失败：' + (error.message || '未知错误'));
+            }
+        }
+        
+        // 删除对话
+        async function deleteConversation() {
+            if (!currentConversationId) return;
+            
+            if (confirm('确定要删除这个对话吗？')) {
+                try {
+                    const response = await fetch(`${API_BASE_URL}/conversations/${currentConversationId}`, {
+                        method: 'DELETE'
+                    });
+                    
+                    const data = await response.json();
+                    if (data.success) {
+                        currentConversationId = null;
+                        
+                        // 重置界面
+                        document.getElementById('content-title').textContent = '选择一个对话';
+                        document.getElementById('chat-content').innerHTML = `
+                            <div class="flex justify-center items-center h-full text-gray-400">
+                                <div class="text-center">
+                                    <i class="fa fa-comments-o text-4xl mb-2"></i>
+                                    <p>选择或创建一个对话开始</p>
+                                </div>
+                            </div>
+                        `;
+                        
+                        // 隐藏导出和删除按钮
+                        document.getElementById('export-menu-container').classList.add('hidden');
+                        document.getElementById('delete-conversation').classList.add('hidden');
+                        
+                        // 更新对话列表
+                        loadConversations();
+                        
+                        // 更新对话数量
+                        updateConversationCount();
+                    }
+                } catch (error) {
+                    console.error('删除对话失败:', error);
+                }
+            }
+        }
+        
+        // 预览资料
+        async function previewMaterial() {
+            const materialText = document.getElementById('material-text').value.trim();
+            
+            if (!materialText) {
+                alert('请输入案例文本');
+                return;
+            }
+            
+            try {
+                const formData = new FormData();
+                formData.append('case_text', materialText);
+                
+                const response = await fetch(`${API_BASE_URL}/material/preview`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                // 显示预览结果
+                const previewDiv = document.getElementById('material-preview');
+                const previewContent = document.getElementById('material-preview-content');
+                
+                if (data.success) {
+                    previewDiv.classList.remove('hidden');
+                    
+                    const parsedData = data.result?.parsed_data;
+                    const statistics = data.result?.statistics;
+                    
+                    let previewHTML = `
+                        <div class="text-blue-600 font-semibold mb-2">✓ 预览成功</div>
+                        <div class="text-gray-700 space-y-3">
+                            <div>
+                                <h5 class="font-medium text-sm mb-1">LLM提取结果：</h5>
+                                <div class="bg-white p-3 rounded border border-gray-200">
+                                    <pre class="text-xs overflow-x-auto">${JSON.stringify(parsedData, null, 2)}</pre>
+                                </div>
+                            </div>
+                            <div>
+                                <h5 class="font-medium text-sm mb-1">编辑提取结果（JSON格式）：</h5>
+                                <textarea id="parsed-data-input" class="w-full border border-gray-300 rounded-lg px-3 py-2 h-64 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent">${JSON.stringify(parsedData, null, 2)}</textarea>
+                                <p class="text-xs text-gray-500 mt-1">请确保修改后仍为有效的JSON格式</p>
+                            </div>
+                    `;
+                    
+                    if (statistics) {
+                        previewHTML += `
+                            <div>
+                                <h5 class="font-medium text-sm mb-1">统计信息：</h5>
+                                <ul class="text-xs space-y-1">
+                                    <li>• 维修步骤数量：${statistics.maintenance_steps}</li>
+                                    <li>• Cypher语句数量：${statistics.cypher_statements}</li>
+                                    <li>• 关系键值对数量：${statistics.relation_key_values}</li>
+                                </ul>
+                            </div>
+                        `;
+                    }
+                    
+                    previewHTML += `
+                            <div class="flex justify-end space-x-2 mt-4">
+                                <button id="cancel-import-preview" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm">
+                                    取消
+                                </button>
+                                <button id="confirm-import-preview" class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-blue-600 transition-colors text-sm">
+                                    确认导入
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                    
+                    previewContent.innerHTML = previewHTML;
+                    
+                    // 添加确认导入按钮的事件监听器
+                    document.getElementById('confirm-import-preview').addEventListener('click', function() {
+                        confirmImportWithParsedData();
+                    });
+                    
+                    // 添加取消按钮的事件监听器
+                    document.getElementById('cancel-import-preview').addEventListener('click', function() {
+                        previewDiv.classList.add('hidden');
+                    });
+                } else {
+                    previewDiv.classList.remove('hidden');
+                    previewContent.innerHTML = `
+                        <div class="text-red-600 font-semibold mb-2">✗ 预览失败</div>
+                        <div class="text-gray-700">
+                            <p>${data.message || '未知错误'}</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('预览资料失败:', error);
+                alert('预览资料失败: ' + (error.message || '未知错误'));
+            }
+        }
+        
+        // 确认导入（带修改的解析数据）
+        async function confirmImportWithParsedData() {
+            const parsedDataInput = document.getElementById('parsed-data-input');
+            const parsedDataText = parsedDataInput.value.trim();
+            
+            try {
+                // 验证JSON格式
+                JSON.parse(parsedDataText);
+            } catch (error) {
+                alert('JSON格式错误，请检查修改后的内容');
+                return;
+            }
+            
+            try {
+                const formData = new FormData();
+                formData.append('parsed_data', parsedDataText);
+                formData.append('case_text', document.getElementById('material-text').value.trim());
+                
+                const response = await fetch(`${API_BASE_URL}/material/import-with-parsed`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                // 显示导入结果
+                const resultDiv = document.getElementById('material-result');
+                const resultContent = document.getElementById('material-result-content');
+                
+                if (data.success) {
+                    resultDiv.classList.remove('hidden');
+                    resultContent.innerHTML = `
+                        <div class="text-green-600 font-semibold mb-2">✓ 导入成功</div>
+                        <div class="text-gray-700">
+                            <p>案例已成功导入到Neo4j数据库</p>
+                            ${data.result ? `<p>详细信息：${JSON.stringify(data.result, null, 2)}</p>` : ''}
+                        </div>
+                    `;
+                    
+                    // 清空输入框
+                    document.getElementById('material-text').value = '';
+                    // 隐藏预览结果
+                    document.getElementById('material-preview').classList.add('hidden');
+                } else {
+                    resultDiv.classList.remove('hidden');
+                    resultContent.innerHTML = `
+                        <div class="text-red-600 font-semibold mb-2">✗ 导入失败</div>
+                        <div class="text-gray-700">
+                            <p>${data.message || '未知错误'}</p>
+                            ${data.result ? `<p>详细信息：${JSON.stringify(data.result, null, 2)}</p>` : ''}
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('导入资料失败:', error);
+                alert('导入资料失败: ' + (error.message || '未知错误'));
+            }
+        }
+
+        // 导入资料
+        async function importMaterial() {
+            const materialText = document.getElementById('material-text').value.trim();
+            
+            if (!materialText) {
+                alert('请输入案例文本');
+                return;
+            }
+            
+            try {
+                const formData = new FormData();
+                formData.append('case_text', materialText);
+                
+                const response = await fetch(`${API_BASE_URL}/material/import`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                // 显示结果
+                const resultDiv = document.getElementById('material-result');
+                const resultContent = document.getElementById('material-result-content');
+                
+                if (data.success) {
+                    resultDiv.classList.remove('hidden');
+                    resultContent.innerHTML = `
+                        <div class="text-green-600 font-semibold mb-2">✓ 导入成功</div>
+                        <div class="text-gray-700">
+                            <p>案例已成功导入到Neo4j数据库</p>
+                            ${data.result ? `<p>详细信息：${JSON.stringify(data.result, null, 2)}</p>` : ''}
+                        </div>
+                    `;
+                    
+                    // 清空输入框
+                    document.getElementById('material-text').value = '';
+                } else {
+                    resultDiv.classList.remove('hidden');
+                    resultContent.innerHTML = `
+                        <div class="text-red-600 font-semibold mb-2">✗ 导入失败</div>
+                        <div class="text-gray-700">
+                            <p>${data.message || '未知错误'}</p>
+                            ${data.result ? `<p>详细信息：${JSON.stringify(data.result, null, 2)}</p>` : ''}
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('导入资料失败:', error);
+                alert('导入资料失败: ' + (error.message || '未知错误'));
+            }
+        }
+        
+        // 创建新对话
+        async function createNewConversation() {
+            const titleInput = document.getElementById('conversation-title-input');
+            const title = titleInput.value.trim();
+            
+            if (!title) {
+                alert('请输入对话标题');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/conversations`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ title: title })
+                });
+                
+                const conversation = await response.json();
+                
+                // 关闭模态框
+                document.getElementById('new-conversation-modal').classList.add('hidden');
+                titleInput.value = '';
+                
+                // 选择新创建的对话
+                selectConversation(conversation.id);
+                
+                // 更新对话数量
+                updateConversationCount();
+            } catch (error) {
+                console.error('创建对话失败:', error);
+            }
+        }
+        
+        // 显示聊天内容
+        function showChatContent() {
+            document.getElementById('chat-content').classList.remove('hidden');
+            document.getElementById('import-content').classList.add('hidden');
+            document.getElementById('material-content').classList.add('hidden');
+            document.getElementById('visualize-content').classList.add('hidden');
+            document.getElementById('operationsData-content').classList.add('hidden');
+            document.getElementById('chat-input-area').classList.remove('hidden');
+        }
+        
+        // 显示导入内容
+        function showImportContent() {
+            document.getElementById('chat-content').classList.add('hidden');
+            document.getElementById('import-content').classList.remove('hidden');
+            document.getElementById('visualize-content').classList.add('hidden');
+            document.getElementById('material-content').classList.add('hidden');
+            document.getElementById('operationsData-content').classList.add('hidden');
+            document.getElementById('chat-input-area').classList.add('hidden');
+            document.getElementById('content-title').textContent = '导入对话';
+            document.getElementById('export-menu-container').classList.add('hidden');
+            document.getElementById('delete-conversation').classList.add('hidden');
+        }
+        
+        // 显示资料导入内容
+        function showMaterialContent() {
+            document.getElementById('chat-content').classList.add('hidden');
+            document.getElementById('import-content').classList.add('hidden');
+            document.getElementById('visualize-content').classList.add('hidden');
+            document.getElementById('material-content').classList.remove('hidden');
+            document.getElementById('operationsData-content').classList.add('hidden');
+            document.getElementById('chat-input-area').classList.add('hidden');
+            document.getElementById('content-title').textContent = '资料导入';
+            document.getElementById('export-menu-container').classList.add('hidden');
+            document.getElementById('delete-conversation').classList.add('hidden');
+        }
+        
+        // 显示知识图谱内容
+        async function showVisualizeContent() {
+            document.getElementById('chat-content').classList.add('hidden');
+            document.getElementById('import-content').classList.add('hidden');
+            document.getElementById('material-content').classList.add('hidden');
+            document.getElementById('operationsData-content').classList.add('hidden');
+            document.getElementById('visualize-content').classList.remove('hidden');
+            document.getElementById('chat-input-area').classList.add('hidden');
+            document.getElementById('content-title').textContent = '知识图谱';
+            document.getElementById('export-menu-container').classList.add('hidden');
+            document.getElementById('delete-conversation').classList.add('hidden');
+            
+            // 加载节点类型总数
+            await loadNodeTypeCounts();
+            
+            // 默认显示全部知识图谱
+            executeGraphQuery('');
+        }
+        
+        // 显示系统运维内容
+        function showOperationsDataContent() {
+            document.getElementById('chat-content').classList.add('hidden');
+            document.getElementById('import-content').classList.add('hidden');
+            document.getElementById('material-content').classList.add('hidden');
+            document.getElementById('visualize-content').classList.add('hidden');
+            document.getElementById('operationsData-content').classList.remove('hidden');
+            document.getElementById('chat-input-area').classList.add('hidden');
+            document.getElementById('content-title').textContent = '系统运维';
+            document.getElementById('export-menu-container').classList.add('hidden');
+            document.getElementById('delete-conversation').classList.add('hidden');
+            
+            // 初始化运维大屏
+            initOperationsDashboard();
+        }
+        
+        // 加载节点类型总数
+        async function loadNodeTypeCounts() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/graph/node-counts`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    displayNodeTypeCounts(data.counts);
+                    console.log('节点类型总数:', data.counts);
+                }
+            } catch (error) {
+                console.error('加载节点类型总数失败:', error);
+            }
+        }
+
+        // 显示节点类型总数
+function displayNodeTypeCounts(counts) {
+    const container = document.getElementById('node-type-counts');
+    container.innerHTML = '';
+
+    if (counts) {
+        // 为容器添加滚动条样式和美化
+        container.style.maxHeight = '200px';
+        container.style.overflowY = 'auto';
+        container.style.backgroundColor = '#FFFFFF';
+        container.style.borderRadius = '8px';
+        container.style.border = '1px solid #B0C4DE';
+        container.style.padding = '4px 0';
+
+        // 自定义滚动条样式（Webkit浏览器）
+        container.style.scrollbarWidth = 'thin';
+        container.style.scrollbarColor = '#87CEFA #F0F8FF';
+
+        const entries = Object.entries(counts);
+        entries.forEach(([type, count], index) => {
+            const item = document.createElement('div');
+            // 根据奇偶行添加不同的背景色
+            const bgColor = index % 2 === 0 ? '#FFFFFF' : '#F0F8FF';
+            item.className = 'flex justify-between items-center';
+            item.style.padding = '8px 12px';
+            item.style.margin = '0';
+            item.style.backgroundColor = bgColor;
+            item.style.transition = 'all 0.2s ease';
+
+            // 添加悬停效果
+            item.onmouseenter = () => {
+                item.style.backgroundColor = '#E0FFFF';
+                item.style.transform = 'translateX(2px)';
+            };
+            item.onmouseleave = () => {
+                item.style.backgroundColor = bgColor;
+                item.style.transform = 'translateX(0)';
+            };
+
+            item.innerHTML = `
+                <span class="text-gray-700" style="font-size: 13px; font-weight: 500;">${this.escapeHtml ? this.escapeHtml(type) : type}:</span>
+                <span style="font-weight: 600; color: #1E90FF; background: #F0F8FF; padding: 2px 8px; border-radius: 12px; font-size: 13px;">${count}</span>
+            `;
+            container.appendChild(item);
+        });
+
+        // 添加自定义滚动条样式（通过style标签）
+        if (!document.getElementById('custom-scrollbar-style')) {
+            const style = document.createElement('style');
+            style.id = 'custom-scrollbar-style';
+            style.textContent = `
+                #node-type-counts::-webkit-scrollbar {
+                    width: 6px;
+                    height: 6px;
+                }
+                #node-type-counts::-webkit-scrollbar-track {
+                    background: #F0F8FF;
+                    border-radius: 3px;
+                }
+                #node-type-counts::-webkit-scrollbar-thumb {
+                    background: #87CEFA;
+                    border-radius: 3px;
+                }
+                #node-type-counts::-webkit-scrollbar-thumb:hover {
+                    background: #6495ED;
+                }
+            `;
+            document.head.appendChild(style);
+        }
+    } else {
+        // 空状态显示
+        const emptyMsg = document.createElement('div');
+        emptyMsg.className = 'text-center';
+        emptyMsg.style.padding = '20px';
+        emptyMsg.style.color = '#B0C4DE';
+        emptyMsg.style.fontSize = '14px';
+        emptyMsg.innerText = '暂无数据';
+        container.appendChild(emptyMsg);
+    }
+}
+        
+        // 导入对话
+        async function importConversation() {
+            const fileInput = document.getElementById('import-file');
+            const titleInput = document.getElementById('import-title');
+            const file = fileInput.files[0];
+            const title = titleInput.value.trim();
+            
+            if (!file) {
+                alert('请选择要导入的对话文件');
+                return;
+            }
+            
+            if (!title) {
+                alert('请输入对话标题');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('title', title);
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/import`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    alert('对话导入成功');
+                    loadConversations();
+                    updateConversationCount();
+                    showChatContent();
+                    selectConversation(data.conversation_id);
+                } else {
+                    alert('导入失败: ' + data.message);
+                }
+            } catch (error) {
+                console.error('导入对话失败:', error);
+                alert('导入失败: ' + (error.message || '未知错误'));
+            }
+        }
+        
+        // 显示全部知识图谱
+        async function showAllGraph() {
+            console.log('显示全部知识图谱');
+            const nodeLimit = document.getElementById('node-limit').value;
+            executeGraphQuery('', nodeLimit);
+            // 显示加载更多按钮
+            document.getElementById('load-more').classList.remove('hidden');
+        }
+        
+        async function loadMoreGraph() {
+            console.log('加载更多节点');
+            alert('加载更多功能正在开发中，请使用关键词查询特定节点');
+        }
+        
+        // 执行图谱查询
+        async function executeGraphQuery(query = '', nodeLimit = null) {
+            const entityType = document.getElementById('entity-type').value;
+            
+            // 如果没有传入nodeLimit，使用滑块的值
+            if (nodeLimit === null) {
+                nodeLimit = document.getElementById('node-limit').value;
+            }
+            
+            console.log('执行图谱查询:', { query, entityType, nodeLimit });
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/graph/query`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        query: query,
+                        entity_type: entityType,
+                        node_limit: parseInt(nodeLimit)
+                    })
+                });
+                
+                console.log('图谱查询响应状态:', response.status);
+                
+                const data = await response.json();
+                console.log('图谱查询响应数据:', data);
+                
+                if (data.success) {
+                    console.log('渲染图谱:', { nodes: data.nodes.length, edges: data.edges.length });
+                    renderGraph(data.nodes, data.edges);
+                    updateGraphStats(data.stats);
+                } else {
+                    console.error('查询失败:', data.message);
+                    alert('查询失败: ' + (data.message || '未知错误'));
+                }
+            } catch (error) {
+                console.error('执行图谱查询失败:', error);
+                alert('查询失败: ' + (error.message || '未知错误'));
+            }
+        }
+        
+        // 渲染知识图谱
+        function renderGraph(nodes, edges) {
+            const container = document.getElementById('graph-container');
+            
+            // 清空容器
+            container.innerHTML = '';
+            
+            // 准备数据
+            const visNodes = nodes.map(node => ({
+                id: node.id,
+                label: node.label && node.label.length > 15 ? node.label.substring(0, 15) + '...' : (node.label || node.id),
+                title: `${node.label} (${node.type})`,
+                group: node.type,
+                color: {
+                    background: getNodeColor(node.type),
+                    border: getNodeColor(node.type),
+                    highlight: {
+                        background: '#ffffff',
+                        border: getNodeColor(node.type)
+                    },
+                    hover: {
+                        background: '#f3f4f6',
+                        border: getNodeColor(node.type)
+                    }
+                },
+                shape: getNodeShape(node.type),
+                size: node.type === 'Equipment' ? 25 : (node.type === 'Component' ? 20 : 15)
+            }));
+            
+            const visEdges = edges.map(edge => ({
+                from: edge.from_id || edge.from,
+                to: edge.to_id || edge.to,
+                label: edge.label,
+                title: edge.label
+            }));
+            
+            const data = {
+                nodes: visNodes,
+                edges: visEdges
+            };
+            
+            const options = {
+                nodes: {
+                    shape: 'dot',
+                    size: 20,
+                    font: {
+                        size: 12,
+                        face: 'Arial',
+                        color: '#333333',
+                        strokeWidth: 2,
+                        strokeColor: '#ffffff'
+                    },
+                    borderWidth: 1,
+                    shadow: {
+                        enabled: false
+                    }
+                },
+                edges: {
+                    width: 1,
+                    color: {
+                        color: '#848484',
+                        highlight: '#3b82f6',
+                        hover: '#3b82f6'
+                    },
+                    font: {
+                        size: 10,
+                        face: 'Arial',
+                        color: '#666666',
+                        background: '#ffffff',
+                        strokeWidth: 2,
+                        strokeColor: '#ffffff'
+                    },
+                    smooth: {
+                        type: 'continuous',
+                        roundness: 0.5
+                    },
+                    arrows: {
+                        to: {
+                            enabled: true,
+                            scaleFactor: 0.3
+                        }
+                    }
+                },
+                layout: {
+                    improvedLayout: true
+                },
+                interaction: {
+                    zoomView: true,
+                    dragView: true,
+                    hover: true,
+                    tooltipDelay: 200
+                },
+                physics: {
+                    enabled: true,
+                    barnesHut: {
+                        gravitationalConstant: -3000,
+                        centralGravity: 0.3,
+                        springLength: 95,
+                        springConstant: 0.04,
+                        damping: 0.09,
+                        avoidOverlap: 0.2
+                    },
+                    stabilization: {
+                        enabled: true,
+                        iterations: 1000,
+                        updateInterval: 50,
+                        onlyDynamicEdges: false,
+                        fit: true
+                    }
+                }
+            };
+            
+            // 创建网络
+            currentGraph = new vis.Network(container, data, options);
+            
+            // 添加事件监听
+            currentGraph.on('click', function(params) {
+                if (params.nodes.length > 0) {
+                    const nodeId = params.nodes[0];
+                    const node = nodes.find(n => n.id === nodeId);
+                    if (node) {
+                        console.log('点击节点:', node);
+                    }
+                }
+            });
+            
+            currentGraph.on('stabilizationIterationsDone', function() {
+                console.log('图谱稳定完成');
+            });
+        }
+        
+        // 获取节点颜色
+        function getNodeColor(type) {
+            const colorMap = {
+                'Equipment': '#3b82f6',      // 蓝色
+                'Component': '#10b981',      // 绿色
+                'Fault': '#ef4444',          // 红色
+                'FaultReason': '#f59e0b',    // 橙色
+                'MaintenanceAction': '#8b5cf6', // 紫色
+                'SafetyNotice': '#ec4899',   // 粉色
+                'KnowledgeSource': '#6b7280', // 灰色
+                'Category': '#14b8a6',       // 青色
+                'FaultPhenomenon': '#f97316', // 橙红色
+                'FaultCause': '#eab308',     // 黄色
+                'RepairAction': '#a855f7',   // 深紫色
+                'Notice': '#f43f5e',         // 玫瑰红
+                'Unknown': '#9ca3af'         // 浅灰色
+            };
+            return colorMap[type] || '#9ca3af';
+        }
+        
+        // 获取节点形状
+        function getNodeShape(type) {
+            const shapeMap = {
+                'Equipment': 'box',
+                'Component': 'dot',
+                'Fault': 'diamond',
+                'FaultReason': 'triangle',
+                'MaintenanceAction': 'star',
+                'SafetyNotice': 'hexagon',
+                'KnowledgeSource': 'square'
+            };
+            return shapeMap[type] || 'dot';
+        }
+        
+        // 更新图谱统计信息
+        function updateGraphStats(stats) {
+            const statsContainer = document.getElementById('graph-stats');
+            statsContainer.innerHTML = '';
+            
+            if (stats) {
+                // 显示基本统计信息
+                Object.entries(stats).forEach(([key, value]) => {
+                    if (key !== 'entity_types') {
+                        const statItem = document.createElement('div');
+                        statItem.textContent = `${key}: ${value}`;
+                        statsContainer.appendChild(statItem);
+                    }
+                });
+                
+                // 创建节点类型分布饼图
+                if (stats.entity_types) {
+                    createNodeTypeChart(stats.entity_types);
+                }
+            }
+        }
+        
+        // 创建节点类型分布饼图
+        function createNodeTypeChart(entityTypes) {
+            const ctx = document.getElementById('nodeTypeChart').getContext('2d');
+            
+            // 准备数据
+            const labels = [];
+            const data = [];
+            const backgroundColors = [
+                '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
+                '#ec4899', '#06b6d4', '#14b8a6', '#84cc16', '#f97316'
+            ];
+            
+            Object.entries(entityTypes).forEach(([type, count], index) => {
+                if (count > 0) {
+                    labels.push(type);
+                    data.push(count);
+                }
+            });
+            
+            // 销毁旧图表
+            if (window.nodeTypeChart) {
+                window.nodeTypeChart.destroy();
+            }
+            
+            // 创建新图表
+            window.nodeTypeChart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: backgroundColors.slice(0, data.length),
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                font: {
+                                    size: 12
+                                },
+                                padding: 15
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.raw || 0;
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = Math.round((value / total) * 100);
+                                    return `${label}: ${value} (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // 设置事件监听器
+        function setupEventListeners() {
+            // 消息表单提交
+            document.getElementById('message-form').addEventListener('submit', function(e) {
+                e.preventDefault();
+                sendMessage();
+            });
+            
+            // 导航按钮
+            document.getElementById('nav-chat').addEventListener('click', function() {
+                showChatContent();
+                // 更新导航按钮状态
+                updateNavButtons('chat');
+            });
+            
+            document.getElementById('nav-visualize').addEventListener('click', function() {
+                showVisualizeContent();
+                updateNavButtons('visualize');
+            });
+            
+            document.getElementById('nav-import').addEventListener('click', function() {
+                showImportContent();
+                updateNavButtons('import');
+            });
+            
+            document.getElementById('nav-material').addEventListener('click', function() {
+                showMaterialContent();
+                updateNavButtons('material');
+            });
+            
+            document.getElementById('nav-operationsData').addEventListener('click', function() {
+                showOperationsDataContent();
+                updateNavButtons('operationsData');
+            });
+            
+            // 新对话按钮
+            document.getElementById('new-conversation-btn').addEventListener('click', function() {
+                document.getElementById('new-conversation-modal').classList.remove('hidden');
+            });
+            
+            // 取消创建对话
+            document.getElementById('cancel-new-conversation').addEventListener('click', function() {
+                document.getElementById('new-conversation-modal').classList.add('hidden');
+                document.getElementById('conversation-title-input').value = '';
+            });
+            
+            // 确认创建对话
+            document.getElementById('confirm-new-conversation').addEventListener('click', createNewConversation);
+            
+            // 导出对话
+            document.getElementById('export-conversation').addEventListener('click', exportConversation);
+            
+            // 导出 Word
+            document.getElementById('export-word').addEventListener('click', function(e) {
+                e.stopPropagation();
+                exportConversationToWord();
+            });
+            
+            // 导出 JSON
+            document.getElementById('export-json').addEventListener('click', function(e) {
+                e.stopPropagation();
+                exportConversation();
+            });
+
+            // 导出 MD
+            document.getElementById('export-md').addEventListener('click', function(e) {
+                e.stopPropagation();
+                exportConversationToMD();
+            });
+            
+            // 删除对话
+            document.getElementById('delete-conversation').addEventListener('click', deleteConversation);
+            
+            // 点击模态框外部关闭
+            document.getElementById('new-conversation-modal').addEventListener('click', function(e) {
+                if (e.target === this) {
+                    this.classList.add('hidden');
+                    document.getElementById('conversation-title-input').value = '';
+                }
+            });
+            
+            // 导入对话
+            document.getElementById('confirm-import').addEventListener('click', importConversation);
+            document.getElementById('cancel-import').addEventListener('click', showChatContent);
+            
+            // 导入资料
+            // 预览按钮点击事件
+            document.getElementById('preview-material').addEventListener('click', previewMaterial);
+            
+            // 导入按钮点击事件 - 先触发预览
+            document.getElementById('confirm-material').addEventListener('click', function() {
+                // 先执行预览，然后在预览结果中提供确认选项
+                previewMaterial();
+            });
+            
+            document.getElementById('cancel-material').addEventListener('click', showChatContent);
+            
+            // 图谱查询
+            document.getElementById('execute-query').addEventListener('click', function() {
+                const query = document.getElementById('graph-query').value.trim();
+                executeGraphQuery(query);
+            });
+            
+            // 显示全部知识图谱
+            document.getElementById('show-all').addEventListener('click', showAllGraph);
+            
+            // 加载更多
+            document.getElementById('load-more').addEventListener('click', loadMoreGraph);
+            
+            // 节点数量限制滑块
+            const nodeLimitSlider = document.getElementById('node-limit');
+            const nodeLimitValue = document.getElementById('node-limit-value');
+            nodeLimitSlider.addEventListener('input', function() {
+                nodeLimitValue.textContent = this.value;
+                // 如果超过300，显示警告
+                if (parseInt(this.value) > 300) {
+                    nodeLimitValue.classList.add('text-orange-500');
+                } else {
+                    nodeLimitValue.classList.remove('text-orange-500');
+                }
+            });
+            
+            // 刷新节点类型总数
+            document.getElementById('refresh-counts').addEventListener('click', loadNodeTypeCounts);
+        }
+        
+        // 更新导航按钮状态
+        function updateNavButtons(activeNav) {
+            const navButtons = ['chat', 'visualize', 'import', 'material', 'operationsData'];
+            navButtons.forEach(nav => {
+                const button = document.getElementById(`nav-${nav}`);
+                if (nav === activeNav) {
+                    button.classList.add('active');
+                } else {
+                    button.classList.remove('active');
+                }
+            });
+        }
+        
+        // 运维大屏初始化函数
+        let opsDashboardInitialized = false;
+        let opsCharts = {};
+        
+        async function initOperationsDashboard() {
+            if (opsDashboardInitialized) {
+                // 如果已经初始化过，只刷新数据
+                refreshOperationsDashboard();
+                return;
+            }
+            
+            // 从 API 获取真实的节点类型总数数据
+            let entityCategories = {};
+            try {
+                const response = await fetch(`${API_BASE_URL}/graph/node-counts`);
+                const data = await response.json();
+                if (data.success && data.counts) {
+                    entityCategories = data.counts;
+                } else {
+                    // 如果 API 调用失败，使用默认模拟数据
+                    entityCategories = { "设备实体": 342, "故障现象": 187, "维修方案": 96, "零件物料": 223, "标准文档": 104 };
+                }
+            } catch (error) {
+                console.error('加载节点类型数据失败:', error);
+                entityCategories = { "设备实体": 342, "故障现象": 187, "维修方案": 96, "零件物料": 223, "标准文档": 104 };
+            }
+            
+            const relationTypes = { "关联故障": 410, "解决方案引用": 289, "组成关系": 176, "关联设备": 303, "上下游依赖": 98 };
+            const totalEntities = Object.values(entityCategories).reduce((a,b)=>a+b,0);
+            const totalRelations = Object.values(relationTypes).reduce((a,b)=>a+b,0);
+            
+            const faultTop10 = [
+                { name: "汽轮机振动超标", count: 78 }, { name: "锅炉管壁超温", count: 65 }, { name: "发电机转子接地", count: 54 },
+                { name: "给水泵轴温过高", count: 47 }, { name: "磨煤机堵塞", count: 43 }, { name: "引风机轴承异响", count: 39 },
+                { name: "凝汽器真空下降", count: 35 }, { name: "一次风机喘振", count: 31 }, { name: "空预器漏风", count: 28 },
+                { name: "除氧器压力波动", count: 24 }
+            ];
+            
+            const equipDistribution = { "锅炉": 38, "汽轮机": 32, "发电机": 22, "磨煤机": 18, "引风机": 12 };
+            const faultCauses = { "设备老化": 34, "操作失误": 22, "维护不及时": 28, "设计缺陷": 10, "环境因素": 6 };
+            const timelinessData = { "紧急维修": 2.5, "标准维修": 8.2, "计划性检修": 36.5, "预测性维护": 14.0 };
+            
+            const weeklyAccuracy = [82.5, 84.0, 86.2, 87.5, 89.1, 90.3, 91.8];
+            const hotQuestions = [
+                "如何排查汽轮机轴瓦温度异常？", "锅炉 MFT 动作条件有哪些？", "发电机碳刷打火处理方法", "磨煤机电流高的原因",
+                "给水泵最小流量阀故障怎么处理？", "凝结水泵密封水压低的排查", "DEH 系统报警代码解读", "发电机氢气湿度标准",
+                "锅炉吹灰器卡涩怎么办", "汽轮机转速波动原因"
+            ];
+            const hotQuestionsCount = [124, 98, 87, 76, 65, 54, 49, 42, 38, 35];
+            const noAnswerQuestions = [
+                "SCR 脱硝催化剂寿命如何预测？", "超临界机组锅炉启动曲线最优设定？", "发电机定子线棒流量偏差标准？",
+                "汽轮机末级叶片水蚀修复工艺？", "智能巡检机器人故障自检逻辑？"
+            ];
+            const respTimeDist = { "0-200ms": 345, "200-500ms": 520, "500-1000ms": 280, "1000-2000ms": 95, ">2000ms": 28 };
+            const avgResponseTime = 386;
+            
+            const totalDocs = 1247;
+            const weeklyUpdateRate = 18;
+            const equipmentCoverage = { "锅炉": 92, "汽轮机": 88, "发电机": 85, "磨煤机": 78, "引风机": 74, "给水泵": 81, "凝汽器": 70 };
+            const knowledgeHotness = [
+                { name: "汽轮机轴瓦检修规程", value: 286 }, { name: "锅炉四管防磨防爆手册", value: 254 },
+                { name: "发电机励磁系统故障指南", value: 198 }, { name: "转动设备振动标准", value: 176 },
+                { name: "DCS 控制系统维护要点", value: 143 }
+            ];
+            
+            // 节点类型中英文映射
+            const nodeTypeNameMap = {
+                "EquipmentCategory": "设备种类",
+                "Equipment": "设备",
+                "Component": "部件",
+                "Fault": "故障",
+                "FaultPhenomenon": "故障现象",
+                "FaultReason": "故障原因",
+                "MaintenanceAction": "维修措施",
+                "SafetyNotice": "安全注意事项",
+                "KnowledgeSource": "知识来源"
+            };
+            
+            // DOM 元素填充
+            document.getElementById('totalEntities').innerText = totalEntities;
+            document.getElementById('totalRelations').innerText = totalRelations;
+            
+            // 实体分类饼图
+            opsCharts.entityChart = echarts.init(document.getElementById('entityCategoryChart'));
+            opsCharts.entityChart.setOption({
+                tooltip: { trigger: 'item' },
+                legend: { orient: 'vertical', left: 'left', textStyle: { color: '#4682B4' } },
+                series: [{
+                    type: 'pie', radius: '55%',
+                    data: Object.entries(entityCategories).map(([n,v])=>({name:nodeTypeNameMap[n] || n, value:v})),
+                    itemStyle: { borderRadius: 8, borderColor: '#fff', borderWidth: 2 },
+                    color: ['#1E90FF','#6495ED','#00BFFF','#87CEFA','#4682B4', '#20B2AA', '#5F9EA0', '#B0C4DE', '#87CEEB']
+                }]
+            });
+            
+            // 关系类型分布饼图
+            opsCharts.relationChart = echarts.init(document.getElementById('relationTypeChart'));
+            opsCharts.relationChart.setOption({
+                tooltip: { trigger: 'item' },
+                legend: { orient: 'vertical', left: 'left' },
+                series: [{
+                    type: 'pie', radius: '55%',
+                    data: Object.entries(relationTypes).map(([n,v])=>({name:n, value:v})),
+                    color: ['#48D1CC','#40E0D0','#00CED1','#5F9EA0','#008B8B']
+                }]
+            });
+            
+            // 高频故障 TOP10 列表渲染
+            const faultListDiv = document.getElementById('faultTopList');
+            faultListDiv.innerHTML = '';
+            faultTop10.forEach((item, idx) => {
+                const div = document.createElement('div');
+                div.style.display = 'flex';
+                div.style.justifyContent = 'space-between';
+                div.style.padding = '6px 0';
+                div.style.borderBottom = '1px solid #E0FFFF';
+                div.innerHTML = `<span style="font-weight:600;color:#1E90FF;">${idx+1}</span> <span style="flex:1; margin:0 8px;">${item.name}</span> <span class="badge-blue">${item.count}次</span>`;
+                faultListDiv.appendChild(div);
+            });
+            
+            // 故障装备分布饼图
+            opsCharts.equipChart = echarts.init(document.getElementById('equipmentPieChart'));
+            opsCharts.equipChart.setOption({
+                tooltip: { trigger: 'item' },
+                legend: { orient: 'vertical', left: 'left' },
+                series: [{
+                    type: 'pie', radius: '50%',
+                    data: Object.entries(equipDistribution).map(([n,v])=>({name:n, value:v})),
+                    color: ['#1E90FF','#6495ED','#00BFFF','#87CEFA','#B0C4DE']
+                }]
+            });
+            
+            // 故障原因分析饼图
+            opsCharts.causeChart = echarts.init(document.getElementById('faultCauseChart'));
+            opsCharts.causeChart.setOption({
+                tooltip: { trigger: 'item' },
+                legend: { top: 'bottom' },
+                series: [{
+                    type: 'pie', radius: ['40%','65%'],
+                    data: Object.entries(faultCauses).map(([n,v])=>({name:n, value:v})),
+                    label: { show: true }
+                }]
+            });
+            
+            // 维修方案时效性统计
+            opsCharts.timelinessChart = echarts.init(document.getElementById('timelinessChart'));
+            opsCharts.timelinessChart.setOption({
+                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+                xAxis: { type: 'value', name: '平均耗时 (小时)' },
+                yAxis: { type: 'category', data: Object.keys(timelinessData), axisLabel: { fontWeight:500 } },
+                series: [{
+                    type: 'bar',
+                    data: Object.values(timelinessData),
+                    itemStyle: { color: '#1E90FF', borderRadius: [0, 8, 8, 0] },
+                    label: { show: true, position: 'right' }
+                }]
+            });
+            
+            // 问答准确率趋势
+            opsCharts.accuracyTrend = echarts.init(document.getElementById('accuracyTrendChart'));
+            opsCharts.accuracyTrend.setOption({
+                tooltip: { trigger: 'axis' },
+                xAxis: { type: 'category', data: ['W-6','W-5','W-4','W-3','W-2','上周','本周'] },
+                yAxis: { type: 'value', name: '准确率 (%)', min: 75 },
+                series: [{
+                    type: 'line',
+                    data: weeklyAccuracy,
+                    smooth: true,
+                    lineStyle: { color: '#1E90FF', width: 3 },
+                    areaStyle: { opacity: 0.1, color: '#87CEFA' },
+                    symbol: 'circle',
+                    symbolSize: 8
+                }]
+            });
+            document.getElementById('accuracyRate').innerText = weeklyAccuracy[weeklyAccuracy.length-1] + '%';
+            document.getElementById('avgRespTime').innerText = avgResponseTime;
+            
+            // 热门问题 TOP10 列表
+            const hotList = document.getElementById('hotQuestionsList');
+            hotList.innerHTML = '';
+            for(let i=0; i<hotQuestions.length; i++) {
+                const li = document.createElement('li');
+                li.innerHTML = `<span class="trend-rank">${i+1}</span><span class="trend-question">${hotQuestions[i]}</span><span class="trend-count">${hotQuestionsCount[i]}次</span>`;
+                hotList.appendChild(li);
+            }
+            
+            // 无答案问题列表
+            const noAnswerListDom = document.getElementById('noAnswerList');
+            noAnswerListDom.innerHTML = '';
+            noAnswerQuestions.forEach(q => {
+                const li = document.createElement('li');
+                li.innerHTML = `<i class="fas fa-exclamation-circle" style="color:#D97706; margin-right:8px;"></i><span class="noanswer-text">${q}</span>`;
+                noAnswerListDom.appendChild(li);
+            });
+            document.getElementById('noAnswerCount').innerText = noAnswerQuestions.length;
+            
+            // 响应时间分布柱状图
+            opsCharts.respTimeChart = echarts.init(document.getElementById('responseTimeChart'));
+            opsCharts.respTimeChart.setOption({
+                tooltip: { trigger: 'axis' },
+                xAxis: { type: 'category', data: Object.keys(respTimeDist), axisLabel: { rotate: 15 } },
+                yAxis: { type: 'value', name: '请求次数' },
+                series: [{
+                    type: 'bar',
+                    data: Object.values(respTimeDist),
+                    itemStyle: { color: '#6495ED', borderRadius: [6,6,0,0] }
+                }]
+            });
+            
+            // 知识资产数据
+            document.getElementById('docTotal').innerText = totalDocs;
+            document.getElementById('updateFreq').innerText = weeklyUpdateRate + ' 次/周';
+            
+            // 各装备知识覆盖率
+            opsCharts.coverageChart = echarts.init(document.getElementById('coverageChart'));
+            const covNames = Object.keys(equipmentCoverage);
+            const covValues = Object.values(equipmentCoverage);
+            opsCharts.coverageChart.setOption({
+                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+                grid: { containLabel: true, left: '10%' },
+                xAxis: { type: 'value', name: '覆盖率 (%)', max: 100 },
+                yAxis: { type: 'category', data: covNames, axisLabel: { fontWeight: 500 } },
+                series: [{
+                    type: 'bar',
+                    data: covValues,
+                    itemStyle: { color: '#40E0D0', borderRadius: [0, 6, 6, 0] },
+                    label: { show: true, position: 'right' }
+                }]
+            });
+            
+            // 知识引用热度柱状图
+            opsCharts.hotKnowChart = echarts.init(document.getElementById('hotKnowledgeChart'));
+            opsCharts.hotKnowChart.setOption({
+                tooltip: { trigger: 'axis' },
+                xAxis: { type: 'category', data: knowledgeHotness.map(k => k.name), axisLabel: { rotate: 20, interval: 0 } },
+                yAxis: { type: 'value', name: '引用次数' },
+                series: [{
+                    type: 'bar',
+                    data: knowledgeHotness.map(k => k.value),
+                    itemStyle: { color: '#00BFFF', borderRadius: [6,6,0,0] }
+                }]
+            });
+            
+            // 响应式处理
+            window.addEventListener('resize', () => {
+                Object.values(opsCharts).forEach(ch => ch && ch.resize());
+            });
+            
+            opsDashboardInitialized = true;
+            console.log("运维大屏已初始化");
+        }
+        
+        // 刷新运维大屏数据
+        function refreshOperationsDashboard() {
+            // 重新调整所有图表大小
+            Object.values(opsCharts).forEach(ch => ch && ch.resize());
+            console.log("运维大屏数据已刷新");
+        }
+    </script>
+
+</body>
+</html>

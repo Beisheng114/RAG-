@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>知识库管理中心</title>
+  <script src="libs/tailwindcss.min.js"></script>
+  <script src="libs/chart.umd.min.js"></script>
+  <link href="libs/font-awesome-4.7.0.min.css" rel="stylesheet" />
+</head>
+<body class="min-h-screen bg-slate-100 text-slate-800">
+  <div class="max-w-7xl mx-auto px-4 md:px-8 py-6">
+    <div class="flex items-center justify-between mb-6">
+      <div>
+        <h1 class="text-2xl md:text-3xl font-bold text-blue-700"><i class="fa fa-database"></i> 知识库管理中心</h1>
+        <p class="text-sm text-slate-500 mt-1">登录后可查看知识库状态、图谱概览，并执行备份与导入。</p>
+      </div>
+      <div class="flex gap-2">
+        <a href="index.html?page=chat" class="inline-flex items-center gap-2 text-sm px-4 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700">
+          <i class="fa fa-comments-o"></i> 返回对话页面
+        </a>
+        <a href="home.html" class="inline-flex items-center gap-2 text-sm px-4 py-2 rounded-lg bg-white border border-slate-200 text-blue-600 hover:bg-blue-50">
+          <i class="fa fa-home"></i> 返回首页
+        </a>
+      </div>
+    </div>
+
+    <!-- 登录卡片 -->
+    <section id="login-panel" class="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+      <h2 class="text-lg font-semibold mb-4">管理员登录</h2>
+      <div class="grid md:grid-cols-[1fr_auto] gap-3">
+        <input id="admin-token-input" type="password" class="w-full border rounded-lg px-3 py-2" placeholder="请输入登录密钥（X-Admin-Token）" />
+        <button id="admin-login-btn" class="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-5 py-2">登录</button>
+      </div>
+      <p class="text-xs text-slate-500 mt-3">密钥只保存在当前页面内存中，不会持久化到本地。</p>
+    </section>
+
+    <!-- 管理面板 -->
+    <section id="admin-panel" class="hidden space-y-4">
+      <div class="bg-white border border-slate-200 rounded-2xl p-4 md:p-5 shadow-sm flex flex-wrap gap-3 items-center justify-between">
+        <div>
+          <div class="text-sm text-slate-500">当前登录状态</div>
+          <div class="text-green-600 font-semibold" id="login-status">已登录</div>
+        </div>
+        <div class="flex gap-2">
+          <button id="refresh-dashboard" class="px-4 py-2 rounded-lg bg-slate-700 hover:bg-slate-800 text-white text-sm"><i class="fa fa-refresh"></i> 刷新</button>
+          <button id="logout-btn" class="px-4 py-2 rounded-lg bg-slate-200 hover:bg-slate-300 text-slate-700 text-sm">退出登录</button>
+        </div>
+      </div>
+
+      <div class="grid lg:grid-cols-3 gap-4">
+        <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+          <div class="text-sm text-slate-500">知识库版本</div>
+          <div id="kb-version" class="text-2xl font-bold text-blue-700 mt-2">--</div>
+          <ul class="mt-3 space-y-1 text-sm text-slate-600">
+            <li>向量引擎：<span id="kb-vector-index">--</span></li>
+            <li>集合名：<span id="kb-collection">--</span></li>
+            <li>实体总数：<span id="kb-total-entities">--</span></li>
+            <li>节点类型数：<span id="kb-node-type-count">--</span></li>
+          </ul>
+        </div>
+
+        <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm lg:col-span-2">
+          <div class="flex items-center justify-between">
+            <div class="text-sm text-slate-500">图谱概览（节点类型分布，全量统计）</div>
+            <div id="graph-refreshing" class="text-xs text-amber-600 hidden"><i class="fa fa-spinner fa-spin"></i> 刷新中...</div>
+          </div>
+          <div class="h-64 mt-3"><canvas id="node-type-chart"></canvas></div>
+        </div>
+      </div>
+
+      <div class="grid lg:grid-cols-2 gap-4">
+        <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+          <h3 class="font-semibold mb-3">备份管理</h3>
+          <button id="run-backup" class="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 text-sm">
+            <i class="fa fa-download"></i> 一键备份
+          </button>
+          <p class="text-xs text-slate-500 mt-2">自动从 Neo4j 导出当前知识库 CSV 并打包（不是 generate_csv/csv_generate 目录快照）。</p>
+        </div>
+
+        <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+          <h3 class="font-semibold mb-3">知识库一键导入（压缩CSV）</h3>
+          <div class="flex flex-wrap items-center gap-2">
+            <input id="restore-file" type="file" accept=".zip" class="text-sm" />
+            <button id="run-restore" class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-4 py-2 text-sm">
+              <i class="fa fa-upload"></i> 一键导入
+            </button>
+          </div>
+          <p class="text-xs text-slate-500 mt-2">上传备份 zip 后，系统会解压并调用 csv_to_neo4j 将其中 CSV 全量导入 Neo4j。</p>
+        </div>
+      </div>
+
+      <div class="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+        <h3 class="font-semibold mb-3">图谱抽样详情</h3>
+        <div class="grid md:grid-cols-3 gap-3 text-sm">
+          <div class="rounded-lg bg-slate-50 p-3">节点数：<span id="graph-node-count" class="font-semibold">--</span></div>
+          <div class="rounded-lg bg-slate-50 p-3">关系数：<span id="graph-edge-count" class="font-semibold">--</span></div>
+          <div class="rounded-lg bg-slate-50 p-3">检索上限：<span id="graph-node-limit" class="font-semibold">--</span></div>
+        </div>
+      </div>
+
+      <div id="kg-admin-result" class="hidden bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+        <div class="text-sm font-semibold mb-2">操作结果</div>
+        <pre id="kg-admin-result-text" class="bg-slate-900 text-slate-100 rounded-lg p-3 overflow-auto text-xs max-h-96"></pre>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const API_BASE_URL = '/api';
+    let adminToken = '';
+    let nodeTypeChart = null;
+
+    const el = {
+      loginPanel: document.getElementById('login-panel'),
+      adminPanel: document.getElementById('admin-panel'),
+      tokenInput: document.getElementById('admin-token-input'),
+      loginBtn: document.getElementById('admin-login-btn'),
+      logoutBtn: document.getElementById('logout-btn'),
+      refreshBtn: document.getElementById('refresh-dashboard'),
+      backupBtn: document.getElementById('run-backup'),
+      restoreBtn: document.getElementById('run-restore'),
+      restoreFile: document.getElementById('restore-file'),
+      refreshing: document.getElementById('graph-refreshing'),
+      resultWrap: document.getElementById('kg-admin-result'),
+      resultText: document.getElementById('kg-admin-result-text'),
+      kbVersion: document.getElementById('kb-version'),
+      kbVectorIndex: document.getElementById('kb-vector-index'),
+      kbCollection: document.getElementById('kb-collection'),
+      kbTotalEntities: document.getElementById('kb-total-entities'),
+      kbNodeTypeCount: document.getElementById('kb-node-type-count'),
+      graphNodeCount: document.getElementById('graph-node-count'),
+      graphEdgeCount: document.getElementById('graph-edge-count'),
+      graphNodeLimit: document.getElementById('graph-node-limit'),
+      chartCanvas: document.getElementById('node-type-chart')
+    };
+
+    function getHeaders() {
+      return { 'X-Admin-Token': adminToken };
+    }
+
+    function showResult(data) {
+      el.resultWrap.classList.remove('hidden');
+      el.resultText.textContent = JSON.stringify(data, null, 2);
+    }
+
+    async function fetchWithAuth(url, options = {}) {
+      const merged = {
+        ...options,
+        headers: {
+          ...(options.headers || {}),
+          ...getHeaders()
+        }
+      };
+      const res = await fetch(url, merged);
+      const data = await res.json();
+      if (!res.ok || data.success === false) {
+        throw new Error(data.message || data.detail || `请求失败: ${res.status}`);
+      }
+      return data;
+    }
+
+    function renderNodeTypeChart(nodeCounts) {
+      const labels = Object.keys(nodeCounts || {});
+      const values = Object.values(nodeCounts || {});
+
+      if (!nodeTypeChart) {
+        nodeTypeChart = new Chart(el.chartCanvas.getContext('2d'), {
+          type: 'bar',
+          data: {
+            labels,
+            datasets: [{
+              label: '节点数量',
+              data: values,
+              backgroundColor: '#3b82f6'
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: { y: { beginAtZero: true } }
+          }
+        });
+      } else {
+        nodeTypeChart.data.labels = labels;
+        nodeTypeChart.data.datasets[0].data = values;
+        nodeTypeChart.update();
+      }
+    }
+
+    function applyDashboard(data) {
+      const version = data.version || {};
+      const graph = data.graph || {};
+      const nodeCounts = data.node_counts || {};
+
+      el.kbVersion.textContent = version.version || '--';
+      el.kbVectorIndex.textContent = version.vector_index_type || '--';
+      el.kbCollection.textContent = version.qdrant_collection || '--';
+      el.kbTotalEntities.textContent = version.total_entities ?? '--';
+      el.kbNodeTypeCount.textContent = version.node_type_count ?? '--';
+
+      el.graphNodeCount.textContent = graph.stats?.total_nodes ?? '--';
+      el.graphEdgeCount.textContent = graph.stats?.total_edges ?? '--';
+      el.graphNodeLimit.textContent = graph.node_limit ?? '--';
+
+      renderNodeTypeChart(nodeCounts);
+    }
+
+    async function loadDashboard() {
+      el.refreshing.classList.remove('hidden');
+      try {
+        const data = await fetchWithAuth(`${API_BASE_URL}/admin/dashboard`);
+        applyDashboard(data.data || {});
+        showResult(data);
+      } finally {
+        el.refreshing.classList.add('hidden');
+      }
+    }
+
+    async function tryLogin() {
+      const token = el.tokenInput.value.trim();
+      if (!token) {
+        alert('请输入登录密钥');
+        return;
+      }
+      adminToken = token;
+      try {
+        await loadDashboard();
+        el.loginPanel.classList.add('hidden');
+        el.adminPanel.classList.remove('hidden');
+      } catch (e) {
+        adminToken = '';
+        alert(`登录失败：${e.message}`);
+      }
+    }
+
+    function logout() {
+      adminToken = '';
+      el.tokenInput.value = '';
+      el.adminPanel.classList.add('hidden');
+      el.loginPanel.classList.remove('hidden');
+    }
+
+    async function runBackup() {
+      try {
+        const data = await fetchWithAuth(`${API_BASE_URL}/admin/backup`, {
+          method: 'POST'
+        });
+        showResult(data);
+        alert('备份完成');
+        await loadDashboard();
+      } catch (e) {
+        alert(`备份失败：${e.message}`);
+      }
+    }
+
+    async function runRestore() {
+      if (!el.restoreFile.files || !el.restoreFile.files[0]) {
+        alert('请先选择备份zip文件');
+        return;
+      }
+
+      const form = new FormData();
+      form.append('backup_file', el.restoreFile.files[0]);
+
+      try {
+        const data = await fetchWithAuth(`${API_BASE_URL}/admin/restore`, {
+          method: 'POST',
+          body: form
+        });
+        showResult(data);
+        alert('导入完成（已解压）');
+      } catch (e) {
+        alert(`导入失败：${e.message}`);
+      }
+    }
+
+    el.loginBtn.addEventListener('click', tryLogin);
+    el.tokenInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        tryLogin();
+      }
+    });
+    el.logoutBtn.addEventListener('click', logout);
+    el.refreshBtn.addEventListener('click', loadDashboard);
+    el.backupBtn.addEventListener('click', runBackup);
+    el.restoreBtn.addEventListener('click', runRestore);
+  </script>
+</body>
+</html>
