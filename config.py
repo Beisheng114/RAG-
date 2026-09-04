@@ -15,32 +15,21 @@ class GraphRAGConfig:
     neo4j_password: str = "myrag123456"
     neo4j_database: str = "neo4j"
 
-    # 向量索引类型:"milvus", "qdrant"
+    # 向量索引类型：当前仅支持 "qdrant"（Milvus 后端已移除）
     vector_index_type: str = "qdrant"
-    
-    # Milvus配置（当vector_index_type为milvus时使用）
-    milvus_host: str = "localhost"
-    milvus_port: int = 19530
-    milvus_collection_name: str = "ship_maintenance_knowledge"
-    milvus_dimension: int = 512  # BGE-base-zh-v1.5的向量维度
 
-    
-    # Qdrant配置（当vector_index_type为qdrant时使用）
+    # Qdrant配置
     qdrant_host: str = "localhost"
     qdrant_port: int = 6333
     qdrant_grpc_port: int = 6334
     qdrant_prefer_grpc: bool = True
     qdrant_collection_name: str = "ship_maintenance_knowledge"
-    qdrant_vector_size: int = 768  # BGE-small-zh-v1.5的向量维度
+    qdrant_vector_size: int = 768  # BGE-base-zh-v1.5的向量维度（bge-base 为 768 维）
     qdrant_distance: str = "Cosine"  # Cosine, Euclidean, Dot
     qdrant_hnsw_m: int = 16
     qdrant_hnsw_ef_construct: int = 100
     # 检索时 HNSW ef（约 64–128）；略小更快、略降召回，与构建 ef_construct 无关
     qdrant_hnsw_ef_search: int = 128
-
-    # FAISS兼容字段（旧配置保留，避免管理页面预览时报错）
-    faiss_index_path: str = "./faiss_index"
-    faiss_dimension: int = 768
 
     # 模型配置
     embedding_model: str = "./models/bge-base-zh-v1.5"
@@ -66,7 +55,7 @@ class GraphRAGConfig:
 
     # 生成配置
     temperature: float = 0.3
-    max_tokens: int = 4096  # 适配 Qwen3-4B 模型的最大上下文 1024
+    max_tokens: int = 4096  # 生成回答的最大 token 数（需不超过所用LLM的上下文窗口）
 
     # 图数据处理配置
     chunk_size: int = 500
@@ -82,8 +71,11 @@ class GraphRAGConfig:
 
     def __post_init__(self):
         """初始化后的处理"""
-        # LightRAG使用Round-robin策略，无需权重验证
-        pass
+        # Milvus 后端已移除，仅支持 Qdrant
+        if self.vector_index_type != "qdrant":
+            raise ValueError(
+                f"vector_index_type 仅支持 'qdrant'，当前值: {self.vector_index_type!r}（Milvus 后端已移除）"
+            )
     
     @classmethod
     def from_dict(cls, config_dict: Dict[str, Any]) -> 'GraphRAGConfig':
@@ -98,12 +90,6 @@ class GraphRAGConfig:
             'neo4j_password': self.neo4j_password,
             'neo4j_database': self.neo4j_database,
             'vector_index_type': self.vector_index_type,
-            'milvus_host': self.milvus_host,
-            'milvus_port': self.milvus_port,
-            'milvus_collection_name': self.milvus_collection_name,
-            'milvus_dimension': self.milvus_dimension,
-            'faiss_index_path': self.faiss_index_path,
-            'faiss_dimension': self.faiss_dimension,
             'qdrant_host': self.qdrant_host,
             'qdrant_port': self.qdrant_port,
             'qdrant_grpc_port': self.qdrant_grpc_port,

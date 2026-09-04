@@ -1,0 +1,42 @@
+# Python 运行时产物
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# 虚拟环境
+venv/
+.venv/
+env/
+
+# 环境变量与密钥（切勿提交）
+.env
+.env.*
+
+# 模型与数据（体积大，按需下载/生成）
+models/
+data/
+uploads/
+conversations/
+exports/
+backups/
+llm_debug/
+faiss_index/
+*.sqlite3
+*.db
+
+# 本地存储的 Qdrant 数据
+qdrant_storage/
+
+# IDE / 编辑器
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# 测试与缓存
+.pytest_cache/
+.coverage
+htmlcov/

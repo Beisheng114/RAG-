@@ -34,7 +34,6 @@ from dotenv import load_dotenv
 from config import DEFAULT_CONFIG, GraphRAGConfig
 from rag_modules import (
     GraphDataPreparationModule,
-    # MilvusIndexConstructionModule,
     GenerationIntegrationModule
 )
 from rag_modules.qdrant_index_construction import QdrantIndexConstructionModule, QdrantConfig
@@ -88,37 +87,26 @@ class AdvancedGraphRAGSystem:
                 database=self.config.neo4j_database
             )
 
-            # 2. 向量索引模块（根据配置选择、Milvus或Qdrant）
-                
-            if self.config.vector_index_type == "qdrant":
-                print("初始化Qdrant向量索引...")
-                qdrant_config = QdrantConfig(
-                    host=self.config.qdrant_host,
-                    port=self.config.qdrant_port,
-                    grpc_port=self.config.qdrant_grpc_port,
-                    prefer_grpc=self.config.qdrant_prefer_grpc,
-                    collection_name=self.config.qdrant_collection_name,
-                    vector_size=self.config.qdrant_vector_size,
-                    distance=self.config.qdrant_distance,
-                    hnsw_config={
-                        "m": self.config.qdrant_hnsw_m,
-                        "ef_construct": self.config.qdrant_hnsw_ef_construct
-                    },
-                    hnsw_ef_search=int(getattr(self.config, "qdrant_hnsw_ef_search", 128)),
-                )
-                self.index_module = QdrantIndexConstructionModule(
-                    config=qdrant_config,
-                    embedding_model_path=self.config.embedding_model
-                )
-            # else:
-            #     print("初始化Milvus向量索引...")
-            #     self.index_module = MilvusIndexConstructionModule(
-            #         host=self.config.milvus_host,
-            #         port=self.config.milvus_port,
-            #         collection_name=self.config.milvus_collection_name,
-            #         dimension=self.config.milvus_dimension,
-            #         model_name=self.config.embedding_model
-            #     )
+            # 2. 向量索引模块（当前仅支持 Qdrant）
+            print("初始化Qdrant向量索引...")
+            qdrant_config = QdrantConfig(
+                host=self.config.qdrant_host,
+                port=self.config.qdrant_port,
+                grpc_port=self.config.qdrant_grpc_port,
+                prefer_grpc=self.config.qdrant_prefer_grpc,
+                collection_name=self.config.qdrant_collection_name,
+                vector_size=self.config.qdrant_vector_size,
+                distance=self.config.qdrant_distance,
+                hnsw_config={
+                    "m": self.config.qdrant_hnsw_m,
+                    "ef_construct": self.config.qdrant_hnsw_ef_construct
+                },
+                hnsw_ef_search=int(getattr(self.config, "qdrant_hnsw_ef_search", 128)),
+            )
+            self.index_module = QdrantIndexConstructionModule(
+                config=qdrant_config,
+                embedding_model_path=self.config.embedding_model
+            )
 
             # 3. 生成模块
             print("初始化生成模块...")
@@ -183,50 +171,27 @@ class AdvancedGraphRAGSystem:
         print("\n检查知识库状态...")
 
         try:
-            if self.config.vector_index_type == "qdrant":
-                if self.index_module.has_collection():
-                    print("✅ 发现已存在的Qdrant知识库，尝试加载...")
-                    if self.index_module.load_collection():
-                        print("知识库加载成功！")
+            if self.index_module.has_collection():
+                print("✅ 发现已存在的Qdrant知识库，尝试加载...")
+                if self.index_module.load_collection():
+                    print("知识库加载成功！")
 
-                        print("加载图数据以支持图检索...")
-                        self.data_module.load_graph_data()
-                        print("构建设备文档...")
-                        self.data_module.build_documents()
-                        print("进行文档分块...")
-                        chunks = self.data_module.chunk_documents(
-                            chunk_size=self.config.chunk_size,
-                            chunk_overlap=self.config.chunk_overlap
-                        )
+                    print("加载图数据以支持图检索...")
+                    self.data_module.load_graph_data()
+                    print("构建设备文档...")
+                    self.data_module.build_documents()
+                    print("进行文档分块...")
+                    chunks = self.data_module.chunk_documents(
+                        chunk_size=self.config.chunk_size,
+                        chunk_overlap=self.config.chunk_overlap
+                    )
 
-                        self._initialize_retrievers(chunks)
-                        return
-                    else:
-                        print("❌ 知识库加载失败，开始重建...")
+                    self._initialize_retrievers(chunks)
+                    return
+                else:
+                    print("❌ 知识库加载失败，开始重建...")
 
-                print("未找到已存在的Qdrant集合，开始构建新的知识库...")
-            else:
-                if self.index_module.has_collection():
-                    print("✅ 发现已存在的Milvus知识库，尝试加载...")
-                    if self.index_module.load_collection():
-                        print("知识库加载成功！")
-
-                        print("加载图数据以支持图检索...")
-                        self.data_module.load_graph_data()
-                        print("构建设备文档...")
-                        self.data_module.build_documents()
-                        print("进行文档分块...")
-                        chunks = self.data_module.chunk_documents(
-                            chunk_size=self.config.chunk_size,
-                            chunk_overlap=self.config.chunk_overlap
-                        )
-
-                        self._initialize_retrievers(chunks)
-                        return
-                    else:
-                        print("❌ 知识库加载失败，开始重建...")
-
-                print("未找到已存在的Milvus集合，开始构建新的知识库...")
+            print("未找到已存在的Qdrant集合，开始构建新的知识库...")
 
             print("从Neo4j加载图数据...")
             self.data_module.load_graph_data()
@@ -240,15 +205,14 @@ class AdvancedGraphRAGSystem:
                 chunk_overlap=self.config.chunk_overlap
             )
 
-            print(f"构建{self.config.vector_index_type.upper()}向量索引...")
+            print("构建Qdrant向量索引...")
             if not self.index_module.build_vector_index(chunks):
                 raise Exception("构建向量索引失败")
 
-            if self.config.vector_index_type == "qdrant":
-                print("创建高级索引（全文索引等）...")
-                index_results = self.index_module.setup_advanced_indexes()
-                if any(index_results.values()):
-                    print(f"✅ 高级索引创建成功")
+            print("创建高级索引（全文索引等）...")
+            index_results = self.index_module.setup_advanced_indexes()
+            if any(index_results.values()):
+                print(f"✅ 高级索引创建成功")
 
             self._initialize_retrievers(chunks)
 
@@ -289,10 +253,7 @@ class AdvancedGraphRAGSystem:
         print(f"   文本块数: {stats.get('total_chunks', 0)}")
 
         index_stats = self.index_module.get_collection_stats()
-        if self.config.vector_index_type == "qdrant":
-            print(f"   向量索引: {index_stats.get('points_count', 0)} 条记录 (Qdrant)")
-        else:
-            print(f"   向量索引: {index_stats.get('row_count', 0)} 条记录 (Milvus)")
+        print(f"   向量索引: {index_stats.get('points_count', 0)} 条记录 (Qdrant)")
 
         route_stats = self.query_router.get_route_statistics()
         print(f"   路由统计: 总查询 {route_stats.get('total_queries', 0)} 次")
@@ -552,18 +513,11 @@ class AdvancedGraphRAGSystem:
                 return
 
         try:
-            if self.config.vector_index_type == "qdrant":
-                print("删除现有的Qdrant集合...")
-                if self.index_module.delete_collection():
-                    print("✅ 现有Qdrant集合已删除")
-                else:
-                    print("删除集合时出现问题，继续重建...")
+            print("删除现有的Qdrant集合...")
+            if self.index_module.delete_collection():
+                print("✅ 现有Qdrant集合已删除")
             else:
-                print("删除现有的Milvus集合...")
-                if self.index_module.delete_collection():
-                    print("✅ 现有Milvus集合已删除")
-                else:
-                    print("删除集合时出现问题，继续重建...")
+                print("删除集合时出现问题，继续重建...")
 
             print("开始重建知识库...")
             self.build_knowledge_base()
@@ -573,10 +527,7 @@ class AdvancedGraphRAGSystem:
         except Exception as e:
             logger.error(f"重建知识库失败: {e}")
             print(f"❌ 重建失败: {e}")
-            if self.config.vector_index_type == "milvus":
-                print("建议：请检查Milvus服务状态后重试")
-            elif self.config.vector_index_type == "qdrant":
-                print("建议：请检查Qdrant服务状态后重试")
+            print("建议：请检查Qdrant服务状态后重试")
 
     def update_knowledge_base_incremental(self, neo4j_node_ids: List[str]):
         """

@@ -1,0 +1,25 @@
+# Web 框架
+fastapi>=0.110
+uvicorn>=0.29
+pydantic>=2.6
+
+# 数据库
+neo4j>=5.19
+qdrant-client>=1.9
+
+# LangChain
+langchain-core>=0.2
+langchain-community>=0.2
+langchain-huggingface>=0.1
+
+# 嵌入/重排模型
+sentence-transformers>=2.7
+transformers>=4.40
+
+# 工具库
+python-dotenv>=1.0
+numpy>=1.26
+pandas>=2.2
+openai>=1.30
+requests>=2.31
+PyYAML>=6.0

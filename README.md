@@ -8,7 +8,7 @@
 
 - **混合检索**：结合向量检索和图检索，提供更精准的信息获取
 - **本地模型支持**：支持本地部署的BAAI/bge-base-zh-v1.5嵌入模型
-- **多向量数据库支持**：支持Qdrant和Milvus向量数据库
+- **Qdrant向量数据库**：存储和检索向量数据
 - **Neo4j图数据库**：存储和检索复杂的知识图谱关系
 - **智能查询路由**：根据查询类型自动选择最佳检索策略
 - **多模型支持**：可选择使用Deepseek、OpenAI或本地Ollama模型提高数据提取准确率
@@ -37,20 +37,21 @@
 
 ```
 ├── app.py                # FastAPI应用入口
-├── ragmain.py           # 主程序入口
+├── ragmain.py           # 主程序入口（CLI交互）
 ├── config.py            # 配置文件
 ├── requirements.txt     # 依赖项
-├── 启动.bat            # 启动脚本
-├── 关闭.bat            # 关闭脚本
-├── data/                # 原始数据文件
+├── download_model.py    # 嵌入模型下载脚本
+├── csv_to_neo4j.py      # CSV知识数据导入Neo4j工具
+├── 启动.bat / 关闭.bat   # Windows启动/关闭脚本
+├── 启动                  # Linux/Mac启动脚本
+├── core/                # 应用共享上下文
+│   └── system_context.py            # RAG系统全局实例管理
 ├── rag_modules/         # RAG核心模块
-│   ├── hybrid_retrieval.py          # 混合检索模块
+│   ├── hybrid_retrieval.py          # 混合检索模块（向量+BM25+图，RRF融合）
 │   ├── graph_rag_retrieval.py       # 图RAG检索
-│   ├── faiss_index_construction.py  # Faiss索引构建
 │   ├── qdrant_index_construction.py # Qdrant索引构建
-│   ├── milvus_index_construction.py # Milvus索引构建
 │   ├── graph_data_preparation.py    # 图数据准备
-│   ├── graph_data_insert.py         # 图数据插入
+│   ├── graph_data_insert.py         # 图数据插入（LLM抽取）
 │   ├── graph_indexing.py            # 图索引构建
 │   ├── intelligent_query_router.py  # 智能查询路由
 │   ├── generation_integration.py    # 生成集成
@@ -61,30 +62,22 @@
 │   ├── kg_import_routes.py          # 知识图谱导入路由
 │   └── page_routes.py               # 页面路由
 ├── services/            # 服务层
+│   ├── admin_service.py             # 管理服务
+│   ├── graph_service.py             # 图查询服务
 │   └── kg_import_service.py         # 知识图谱导入服务
-├── static/              # 静态文件
-│   ├── index.html                   # 主页面
-│   ├── index.css                    # 样式文件
-│   └── index.js                     # JavaScript文件
-├── csv_generate/        # CSV生成工具
-│   ├── config.yaml                  # 配置文件
-│   ├── kg_generator_v2.py           # 知识图谱生成器
-│   └── llm_client.py                # LLM客户端
-├── faiss_index/         # Faiss索引存储
-├── models/              # 模型存储
-├── uploads/             # 上传文件存储
-└── llm_debug/           # LLM调试信息
+├── static/              # 静态文件（Web界面）
+├── models/              # 模型存储（git忽略，download_model.py下载）
+└── conversations/       # 对话记录存储（git忽略，运行时生成）
 ```
 
 ## 快速开始
 
 ### 环境要求
 
-- Python 3.8+
+- Python 3.10+
 - Neo4j 5.0+
-- Qdrant 1.0+ (可选)
-- Milvus 2.0+ (可选)
-- Ollama (可选，用于本地LLM服务)
+- Qdrant 1.0+
+- Ollama（可选，用于本地LLM服务）
 - CUDA 11.0+ (可选，用于加速模型)
 
 ### 安装依赖
@@ -115,28 +108,23 @@ python download_model.py
 
 ### 配置设置
 
-编辑 `config.py` 文件，设置以下参数：
+编辑 `config.py` 文件，或通过环境变量（推荐，见下方"安全配置"）设置以下参数：
 
 ```python
 # 模型配置
-embedding_model: str = "./models/bge-base-zh-v1.5"  # 本地模型路径
-llm_model: str = "http://localhost:8000/v1"  # 本地LLM服务地址
+embedding_model: str = "./models/bge-base-zh-v1.5"  # 本地嵌入模型路径（768维）
+llm_provider: str = "ollama"      # "vllm" 或 "ollama"
 
-# Neo4j配置
+# Neo4j配置（密码请通过环境变量 NEO4J_PASSWORD 注入，勿写入代码）
 neo4j_uri: str = "bolt://localhost:7687"
 neo4j_user: str = "neo4j"
-neo4j_password: str = "your_password"
 neo4j_database: str = "neo4j"
 
-# 向量数据库配置
-use_qdrant: bool = True
-qdrant_url: str = "http://localhost:6333"
-qdrant_collection: str = "ship_maintenance"
-
-use_milvus: bool = False
-milvus_host: str = "localhost"
-milvus_port: int = 19530
-milvus_collection: str = "ship_maintenance_knowledge"
+# Qdrant配置
+qdrant_host: str = "localhost"
+qdrant_port: int = 6333
+qdrant_collection_name: str = "ship_maintenance_knowledge"
+qdrant_vector_size: int = 768    # 与 bge-base-zh-v1.5 的维度一致
 ```
 
 ### 启动服务
@@ -148,8 +136,8 @@ milvus_collection: str = "ship_maintenance_knowledge"
 双击 启动.bat
 
 # Linux/Mac
-chmod +x 启动.sh
-./启动.sh
+chmod +x 启动
+./启动
 ```
 
 启动脚本会自动启动以下服务：
@@ -201,7 +189,7 @@ python app.py
 
 ### 1. 向量检索
 
-- 支持FAISS、Qdrant和Milvus向量数据库
+- 使用Qdrant向量数据库
 - 本地存储索引文件，提高系统可靠性
 - 支持增量更新，减少启动时间
 
@@ -233,9 +221,9 @@ python app.py
 
 ### 数据准备
 
-1. **原始数据**：将PDF、DOCX等文档放入 `data/` 目录
-2. **数据转换**：使用 `csv_generate/` 工具将文档转换为CSV格式
-3. **数据导入**：使用Web界面或API将数据导入系统
+1. **CSV知识数据**：准备符合Schema的CSV文件（设备/部件/故障/现象/原因/维修措施等）
+2. **图数据库导入**：使用 `csv_to_neo4j.py` 将CSV数据导入Neo4j
+3. **文档导入**：也可通过Web界面上传PDF等文档，由LLM自动抽取实体与关系
 
 ### 知识库更新
 
@@ -294,5 +282,5 @@ python app.py
 
 
 
-**版本**: 1.0.0
-**更新日期**: 2026-04-23
+**版本**: 1.1.0
+**更新日期**: 2026-09-04
