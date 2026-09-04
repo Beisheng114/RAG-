@@ -1,13 +1,24 @@
 # 一键启动：Qdrant + Neo4j + RAG 应用
-# Ollama 建议跑在宿主机（模型文件大），通过 host.docker.internal 访问。
+# Ollama 建议跑在宿主机（模型文件大），应用容器经 host.docker.internal 访问。
 #
-# 用法：
-#   1) cp .env.example .env 并填写 NEO4J_PASSWORD 等
-#   2) python download_model.py --all        # 下载嵌入+精排模型到 ./models
+# 基本用法：
+#   1) cp .env.example .env 并填写 NEO4J_PASSWORD
+#   2) 模型下载（二选一）：
+#      a. 宿主机执行:        python download_model.py --all
+#      b. 或用容器下载:      docker compose run --rm model-download
 #   3) docker compose up -d
-#   4) 访问 http://localhost:8002
+#   4) 访问 http://localhost:8002（应用）/ http://localhost:7474（Neo4j 浏览器）
 #
-# 数据持久化卷：qdrant_storage / neo4j_data / app_data（对话SQLite、导出等）
+# 工具服务（按需显式触发，不在默认 up 范围）：
+#   docker compose run --rm model-download    # 下载嵌入+精排模型到 ./models
+#   docker compose run --rm csv-import        # 清空 Neo4j 并导入 ./generate_csv 的 CSV
+#   docker compose run --rm eval              # 跑检索评测（recall@k/MRR）
+#
+# 数据持久化卷：
+#   qdrant_storage   向量数据
+#   neo4j_data       知识图谱
+#   app_data         对话 SQLite / BM25 缓存 / 上下文缓存
+#   app_exports      对话导出文件
 services:
   qdrant:
     image: qdrant/qdrant:latest
@@ -17,6 +28,13 @@ services:
       - "6334:6334"
     volumes:
       - qdrant_storage:/qdrant/storage
+    healthcheck:
+      # bash /dev/tcp 端口探测（镜像无 curl/wget）
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/6333' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
     restart: unless-stopped
 
   neo4j:
@@ -24,34 +42,46 @@ services:
     container_name: rag_neo4j
     environment:
       - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:?请在 .env 中设置 NEO4J_PASSWORD}
+      - TZ=Asia/Shanghai
     ports:
       - "7687:7687"
       - "7474:7474"
     volumes:
       - neo4j_data:/data
+    healthcheck:
+      # HTTP 7474 可达即认为 bolt 也就绪（首次启动初始化需 10-30 秒）
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/7474' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 30s
     restart: unless-stopped
 
   app:
     build: .
     container_name: rag_app
     depends_on:
-      - qdrant
-      - neo4j
+      qdrant:
+        condition: service_healthy   # 真正就绪（非仅启动）才拉起应用
+      neo4j:
+        condition: service_healthy
     environment:
-      # 数据库连接（容器网络内的服务名）
+      # 数据库连接：容器网络内直连服务名（不绕宿主机，改端口映射也不受影响）
       - NEO4J_URI=bolt://neo4j:7687
       - NEO4J_PASSWORD=${NEO4J_PASSWORD}
-      # Qdrant 走宿主机端口映射（app 容器内默认 localhost 不可达，改为宿主机地址）
-      # macOS/Windows Docker Desktop 支持 host.docker.internal；Linux 需加 extra_hosts
-      - QDRANT_HOST=host.docker.internal
-      # 对话 SQLite 存入持久化卷
+      - QDRANT_HOST=qdrant
+      # 时区：维修记录/复盘按本地日期生成
+      - TZ=Asia/Shanghai
+      # 对话 SQLite 与缓存存入持久化卷
       - CONVERSATIONS_DB_PATH=/app/data/conversations.db
-      # 安全配置（按需填写）
+      # 安全配置（按需填写，见 .env.example）
       - RAG_ADMIN_TOKEN=${RAG_ADMIN_TOKEN:-}
       - RAG_API_KEY=${RAG_API_KEY:-}
       - RAG_CORS_ORIGINS=${RAG_CORS_ORIGINS:-}
-      # LLM：宿主机 Ollama
+      # LLM：宿主机 Ollama（macOS/Win 内置；Linux 由 extra_hosts 映射）
       - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      # 若用 vLLM（跑在宿主机）：
+      # - VLLM_BASE_URL=http://host.docker.internal:8000/v1
     ports:
       - "8002:8002"
     volumes:
@@ -59,15 +89,66 @@ services:
       - ./models:/app/models
       # 本地 PDF 资料库
       - ./source:/app/source
-      # 运行时数据（对话 SQLite、导出、BM25 缓存等）
+      # 运行时数据（对话 SQLite、导出）
       - app_data:/app/data
       - app_exports:/app/exports
+      # BM25 / 上下文缓存各自独立卷，容器重建免全量重建索引
+      - bm25_cache:/app/bm25_cache
+      - context_cache:/app/context_cache
+      # 旧版对话 JSON（首次启动自动迁移进 SQLite 后可移除该挂载）
+      - conversations_legacy:/app/conversations
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped
+
+  # ---------- 工具服务（profile: tools，默认不启动） ----------
+
+  model-download:
+    build: .
+    profiles: ["tools"]
+    environment:
+      - RAG_SKIP_WAIT=1
+    volumes:
+      - ./models:/app/models
+    command: ["python", "download_model.py", "--all"]
+
+  csv-import:
+    build: .
+    profiles: ["tools"]
+    depends_on:
+      neo4j:
+        condition: service_healthy
+    environment:
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - TZ=Asia/Shanghai
+    volumes:
+      # 把宿主机的 CSV 目录挂进容器（导入脚本固定读取 ./generate_csv）
+      - ./generate_csv:/app/generate_csv
+    command: ["python", "csv_to_neo4j.py"]
+
+  eval:
+    build: .
+    profiles: ["tools"]
+    depends_on:
+      app:
+        condition: service_healthy
+    environment:
+      # 评测需要连上 app 同一套 Neo4j/Qdrant
+      - NEO4J_URI=bolt://neo4j:7687
+      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+      - QDRANT_HOST=qdrant
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./models:/app/models
+    command: ["python", "evaluation/run_eval.py", "--save"]
+    restart: "no"
 
 volumes:
   qdrant_storage:
   neo4j_data:
   app_data:
   app_exports:
+  bm25_cache:
+  context_cache:
+  conversations_legacy:

@@ -21,12 +21,21 @@ bm25_cache
 context_cache
 conversations
 conversations.db
+conversations.db-shm
+conversations.db-wal
 exports
 backups
 backup_restores
 source
+generate_csv
 llm_debug
 evaluation/results
+
+# 测试与本地工具产物（运行时不需要）
+tests
+.pytest_cache
+__pycache__
+Makefile
 
 # 本地环境配置
 .env

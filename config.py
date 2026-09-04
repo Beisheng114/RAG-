@@ -60,7 +60,7 @@ class GraphRAGConfig:
     # ollama_model:str = "qwen3.5:2b"
     
     # vLLM配置（当llm_provider为vllm时使用）
-    vllm_base_url: str = "http://127.0.0.1:8000/v1"
+    vllm_base_url: str = os.getenv("VLLM_BASE_URL", "http://127.0.0.1:8000/v1")
         
     # 检索配置（LightRAG Round-robin策略）；多原因/多片段问题建议 >=5
     top_k: int = 5

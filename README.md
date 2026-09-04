@@ -189,26 +189,45 @@ python app.py
 3. **Docker Compose 一键启动（推荐试用方式）**
 
 ```bash
-# 1) 准备环境变量
+# 0) 准备环境变量（或直接 make env）
 cp .env.example .env
 # 编辑 .env，至少设置 NEO4J_PASSWORD
 
-# 2) 下载模型到宿主机（挂载进容器，避免打进镜像）
-python download_model.py --all
+# 1) 下载模型（二选一）
+python download_model.py --all          # 宿主机执行
+docker compose run --rm model-download  # 或用容器执行（无需本地 Python 环境）
 
-# 3) 启动 Qdrant + Neo4j + 应用
+# 2) 启动 Qdrant + Neo4j + 应用（自动等待数据库就绪后再初始化知识库）
 docker compose up -d
 
-# 4) 访问
+# 3) 访问
 # 应用: http://localhost:8002
 # Neo4j 浏览器: http://localhost:7474
 ```
 
-说明：
-- Ollama 建议跑在宿主机（模型文件大），compose 中应用通过
-  `host.docker.internal:11434` 访问（Linux 由 `extra_hosts` 映射支持）
-- 数据卷：`qdrant_storage`（向量）、`neo4j_data`（图谱）、`app_data`（对话
-  SQLite）、`app_exports`（导出文件），重建容器不丢数据
+容器编排细节：
+- **就绪编排**：Neo4j/Qdrant 配置 healthcheck，应用以 `condition:
+  service_healthy` 等待真正就绪才启动；入口脚本 `docker-entrypoint.sh`
+  再做一层端口轮询（指数退避，默认 180 秒），避免数据库初始化期间应用崩溃
+- **网络**：应用在 compose 网络内直连 `qdrant:6333` / `neo4j:7687`
+  服务名（不绕宿主机端口映射）；Ollama/vLLM 跑宿主机，经
+  `host.docker.internal` 访问（Linux 由 `extra_hosts` 自动映射）
+- **时区**：容器为 `Asia/Shanghai`，维修记录/复盘日期与本地一致
+- **数据卷**：`qdrant_storage`（向量）、`neo4j_data`（图谱）、`app_data`
+  （对话 SQLite）、`bm25_cache` / `context_cache`（索引缓存，容器重建免
+  全量重建）、`app_exports`（导出）、`conversations_legacy`（旧 JSON 迁移源）
+
+工具服务（`tools` profile，默认不启动，显式触发）：
+
+```bash
+docker compose run --rm model-download  # 下载嵌入+精排模型
+docker compose run --rm csv-import      # 清空 Neo4j 并导入 ./generate_csv 的 CSV（覆盖图谱，慎用）
+docker compose run --rm eval            # 检索评测，报告存 evaluation/results/
+```
+
+常用命令也可用 `make`（见 `Makefile`）：`make env` / `make up` / `make logs` /
+`make download-models` / `make init-csv` / `make eval` / `make clean-all`（危险，
+删除全部数据卷）。
 
 ### 运行测试
 
