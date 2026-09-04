@@ -65,6 +65,15 @@ class GraphRAGConfig:
     # 检索配置（LightRAG Round-robin策略）；多原因/多片段问题建议 >=5
     top_k: int = 5
 
+    # 精排配置：多路召回 rerank_candidate_k 条 → bge-reranker 精排 → 截断到 top_k
+    # 模型未下载时自动降级跳过（不影响主链路）；下载：python download_model.py --rerank
+    enable_rerank: bool = True
+    rerank_model: str = "./models/bge-reranker-base"
+    rerank_candidate_k: int = 20
+
+    # 多轮对话查询改写（指代消解），检索前将"它怎么修"等改写为独立问题
+    enable_query_rewrite: bool = True
+
     # 生成配置
     temperature: float = 0.3
     max_tokens: int = 4096  # 生成回答的最大 token 数（需不超过所用LLM的上下文窗口）
@@ -119,6 +128,10 @@ class GraphRAGConfig:
             'ollama_model': self.ollama_model,
             'vllm_base_url': self.vllm_base_url,
             'top_k': self.top_k,
+            'enable_rerank': self.enable_rerank,
+            'rerank_model': self.rerank_model,
+            'rerank_candidate_k': self.rerank_candidate_k,
+            'enable_query_rewrite': self.enable_query_rewrite,
             'temperature': self.temperature,
             'max_tokens': self.max_tokens,
             'chunk_size': self.chunk_size,

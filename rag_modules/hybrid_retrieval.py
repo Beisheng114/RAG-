@@ -4,8 +4,11 @@
 结合图结构检索和向量检索，使用Round-robin轮询策略
 """
 
+import hashlib
 import json
 import logging
+import os
+import pickle
 import re
 from typing import List, Dict, Tuple, Any
 from dataclasses import dataclass
@@ -101,13 +104,70 @@ class HybridRetrievalModule:
             auth=(self.config.neo4j_user, self.config.neo4j_password)
         )
         
-        # 初始化BM25检索器
+        # 初始化BM25检索器（优先加载持久化索引；未命中或数据变化时重建并落盘，
+        # 避免每次启动全量重建的内存/CPU开销，也支持知识库更新后自动失效）
         if chunks:
-            self.bm25_retriever = BM25Retriever.from_documents(chunks)
+            self.bm25_retriever = self._load_or_build_bm25(chunks)
             logger.info(f"BM25检索器初始化完成，文档数量: {len(chunks)}")
         
         # 初始化图索引
         self._build_graph_index()
+
+    # ---------- BM25 索引持久化 ----------
+
+    BM25_CACHE_DIR = "bm25_cache"
+    BM25_CACHE_FILE = os.path.join(BM25_CACHE_DIR, "bm25_retriever.pkl")
+
+    @staticmethod
+    def _bm25_signature(chunks: List) -> str:
+        """基于全部块内容生成知识库指纹，用于校验缓存有效性
+
+        覆盖增删改各种变化（包括块数不变但内容替换的情况）
+        """
+        hasher = hashlib.md5()
+        for c in chunks:
+            content = str(getattr(c, "page_content", c))
+            hasher.update(content.encode("utf-8"))
+            hasher.update(b"\x00")
+        return hasher.hexdigest()
+
+    def _load_or_build_bm25(self, chunks: List):
+        """加载持久化BM25索引；缓存不存在/失效/损坏时重建并保存"""
+        signature = self._bm25_signature(chunks)
+        try:
+            if os.path.exists(self.BM25_CACHE_FILE):
+                with open(self.BM25_CACHE_FILE, "rb") as f:
+                    payload = pickle.load(f)
+                if payload.get("signature") == signature:
+                    retriever = payload.get("retriever")
+                    logger.info(f"BM25索引缓存命中，跳过重建（块数: {len(chunks)}）")
+                    return retriever
+                logger.info("BM25索引缓存已失效（知识库数据变化），将重建")
+        except Exception as e:
+            logger.warning(f"BM25索引缓存加载失败，将重建: {e}")
+
+        retriever = BM25Retriever.from_documents(chunks)
+        self._save_bm25_cache(retriever, signature)
+        return retriever
+
+    def _save_bm25_cache(self, retriever, signature: str) -> None:
+        """持久化BM25索引（失败仅告警，不影响主链路）"""
+        try:
+            os.makedirs(self.BM25_CACHE_DIR, exist_ok=True)
+            with open(self.BM25_CACHE_FILE, "wb") as f:
+                pickle.dump({"signature": signature, "retriever": retriever}, f, protocol=pickle.HIGHEST_PROTOCOL)
+            logger.info(f"BM25索引已持久化: {self.BM25_CACHE_FILE}")
+        except Exception as e:
+            logger.warning(f"BM25索引持久化失败（不影响使用）: {e}")
+
+    def invalidate_bm25_cache(self) -> None:
+        """删除BM25索引缓存，下次初始化时强制重建（知识库增量更新/重建后调用）"""
+        try:
+            if os.path.exists(self.BM25_CACHE_FILE):
+                os.remove(self.BM25_CACHE_FILE)
+                logger.info("BM25索引缓存已清除，将在下次初始化时重建")
+        except Exception as e:
+            logger.warning(f"清除BM25索引缓存失败: {e}")
         
     def _build_graph_index(self):
         """构建图索引"""

@@ -41,6 +41,7 @@ from rag_modules.hybrid_retrieval import HybridRetrievalModule
 from rag_modules.graph_rag_retrieval import GraphRAGRetrieval
 from rag_modules.intelligent_query_router import IntelligentQueryRouter, QueryAnalysis
 from rag_modules.graph_data_insert import GraphDataInsert
+from rag_modules.reranker import RerankModule
 
 load_dotenv()
 
@@ -54,7 +55,8 @@ class AdvancedGraphRAGSystem:
     2. 双引擎检索：传统混合检索 + 图RAG检索
     3. 图结构推理：多跳遍历、子图提取、关系推理
     4. 查询复杂度分析：深度理解用户意图
-    5. 自适应学习：基于反馈优化系统性能
+    5. 多轮查询改写：检索前对指代问题做指代消解
+    6. Rerank精排：RRF融合后用bge-reranker精排候选
     """
 
     def __init__(self, config: Optional[GraphRAGConfig] = None):
@@ -69,6 +71,7 @@ class AdvancedGraphRAGSystem:
         self.traditional_retrieval = None
         self.graph_rag_retrieval = None
         self.query_router = None
+        self.rerank_module = None
 
         # 系统状态
         self.system_ready = False
@@ -144,6 +147,11 @@ class AdvancedGraphRAGSystem:
                 llm_client=self.generation_module.client,
                 config=self.config
             )
+
+            # 7. Rerank 精排模块（懒加载，模型缺失时自动降级）
+            self.rerank_module = RerankModule(self.config)
+            if self.rerank_module.is_enabled():
+                print("初始化Rerank精排模块（懒加载）...")
 
             print("初始化数据插入系统")
 
@@ -282,6 +290,18 @@ class AdvancedGraphRAGSystem:
         print(f"\n❓ 用户问题: {question}")
         print(f"🔧 搜索模式: {search_mode}")
 
+        # 多轮对话查询改写（指代消解）：用改写后的独立问题做检索
+        retrieval_query = question
+        if conversation_history and getattr(self.config, "enable_query_rewrite", True):
+            retrieval_query = self.generation_module.rewrite_query(question, conversation_history)
+            if retrieval_query != question:
+                print(f"🔄 查询改写: {question} → {retrieval_query}")
+
+        # 精排候选数：启用rerank时扩大召回，检索后统一精排截断到top_k
+        recall_k = self.config.top_k
+        if self.rerank_module and self.rerank_module.is_enabled():
+            recall_k = max(self.config.top_k, int(getattr(self.config, "rerank_candidate_k", 20)))
+
         # 显示路由决策解释（可选）
         if explain_routing:
             explanation = self.query_router.explain_routing_decision(question)
@@ -293,7 +313,7 @@ class AdvancedGraphRAGSystem:
             # 根据搜索模式选择检索策略
             if search_mode == "traditional":
                 print("🔍 使用传统双搜索模式...")
-                relevant_docs = self.traditional_retrieval.hybrid_search(question, self.config.top_k)
+                relevant_docs = self.traditional_retrieval.hybrid_search(retrieval_query, recall_k)
                 # 创建默认的 QueryAnalysis
                 from rag_modules.intelligent_query_router import QueryAnalysis, SearchStrategy
                 analysis = QueryAnalysis(
@@ -307,7 +327,7 @@ class AdvancedGraphRAGSystem:
                 )
             elif search_mode == "graph":
                 print("🕸️ 使用图搜索模式...")
-                relevant_docs = self.graph_rag_retrieval.graph_rag_search(question, self.config.top_k)
+                relevant_docs = self.graph_rag_retrieval.graph_rag_search(retrieval_query, recall_k)
                 # 创建默认的 QueryAnalysis
                 from rag_modules.intelligent_query_router import QueryAnalysis, SearchStrategy
                 analysis = QueryAnalysis(
@@ -324,15 +344,15 @@ class AdvancedGraphRAGSystem:
                 # 并行执行传统检索和图检索
                 with ThreadPoolExecutor(max_workers=2) as executor:
                     future_traditional = executor.submit(
-                        self.traditional_retrieval.hybrid_search, question, self.config.top_k // 2
+                        self.traditional_retrieval.hybrid_search, retrieval_query, recall_k // 2
                     )
                     future_graph = executor.submit(
-                        self.graph_rag_retrieval.graph_rag_search, question, self.config.top_k // 2
+                        self.graph_rag_retrieval.graph_rag_search, retrieval_query, recall_k // 2
                     )
-                    
+
                     traditional_docs = future_traditional.result()
                     graph_docs = future_graph.result()
-                    
+
                 # 合并结果
                 relevant_docs = traditional_docs + graph_docs
                 # 根据分数排序
@@ -340,7 +360,7 @@ class AdvancedGraphRAGSystem:
                     key=lambda x: x.metadata.get('final_score', x.metadata.get('relevance_score', 0)),
                     reverse=True
                 )
-                relevant_docs = relevant_docs[:self.config.top_k]
+                relevant_docs = relevant_docs[:recall_k]
                 # 创建默认的 QueryAnalysis
                 from rag_modules.intelligent_query_router import QueryAnalysis, SearchStrategy
                 analysis = QueryAnalysis(
@@ -355,7 +375,11 @@ class AdvancedGraphRAGSystem:
             else:
                 # 智能路由模式（默认）
                 print("🧠 使用智能路由模式...")
-                relevant_docs, analysis = self.query_router.route_query(question, self.config.top_k)
+                relevant_docs, analysis = self.query_router.route_query(retrieval_query, recall_k)
+
+            # Rerank 精排：多路候选 → 精排截断到 top_k（模型不可用时自动跳过）
+            if self.rerank_module and self.rerank_module.is_enabled() and relevant_docs:
+                relevant_docs = self.rerank_module.rerank(retrieval_query, relevant_docs, self.config.top_k)
 
             # 2. 显示路由信息
             strategy_icons = {

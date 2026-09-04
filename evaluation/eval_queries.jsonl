@@ -1,0 +1,10 @@
+{"query": "全船停电怎么办", "expected_keywords": ["停电", "失电", "配电板"], "note": "典型故障处置类问题"}
+{"query": "发电机异响如何处理", "expected_keywords": ["发电机", "异响", "轴承"], "note": "现象→原因定位"}
+{"query": "主机排气温度过高的原因有哪些", "expected_keywords": ["排气温度", "主机", "高温"], "note": "多原因类问题"}
+{"query": "滑油压力偏低怎么排查", "expected_keywords": ["滑油", "压力", "滤器"], "note": "排查步骤类"}
+{"query": "艉轴管漏油如何处理", "expected_keywords": ["艉轴", "漏油", "密封"], "note": "部件维修类"}
+{"query": "空气压缩机的常见故障有哪些", "expected_keywords": ["空气压缩机", "故障"], "note": "枚举类问题"}
+{"query": "分油机跑油的原因和处理措施", "expected_keywords": ["分油机", "跑油"], "note": "原因+措施复合"}
+{"query": "柴油机启动困难是什么原因", "expected_keywords": ["柴油机", "启动", "困难"], "note": "启动系统故障"}
+{"query": "船用锅炉水位异常如何处置", "expected_keywords": ["锅炉", "水位"], "note": "参数异常类"}
+{"query": "舵机失灵的应急处理方法", "expected_keywords": ["舵机", "失灵", "应急"], "note": "应急处置类"}

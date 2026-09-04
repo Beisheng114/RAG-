@@ -99,8 +99,11 @@ pip install -r requirements.txt
 ### 下载模型
 
 ```bash
-# 下载BAAI/bge-base-zh-v1.5模型
+# 下载BAAI/bge-base-zh-v1.5嵌入模型（必需）
 python download_model.py
+
+# 可选：下载bge-reranker-base精排模型（启用Rerank精排）
+python download_model.py --rerank
 
 # 可选：下载Ollama模型
 # ollama pull qwen2.5:7b
@@ -224,6 +227,22 @@ python app.py
 - 分析查询类型和意图
 - 根据查询特征选择最佳检索策略
 - 动态调整检索参数
+
+### 5. Rerank 精排与查询改写
+
+- **Rerank 精排**：RRF 多路召回候选（默认 20 条）经 `bge-reranker-base`
+  CrossEncoder 精排后截断到 top_k（默认 5），提升送入 LLM 的上下文质量；
+  模型未下载时自动降级跳过，不影响主链路（`enable_rerank` 可关闭）
+- **查询改写**：多轮对话中"它怎么修？"等指代问题在检索前由 LLM 做
+  指代消解，改写为独立完整问题再检索（失败自动回退原问题，
+  `enable_query_rewrite` 可关闭）
+- **BM25 索引持久化**：BM25 检索器按知识库内容指纹缓存到
+  `bm25_cache/`，重启不再全量重建；知识库增量更新后自动失效重建
+
+### 6. 检索质量评测
+
+`evaluation/` 提供基于标注关键词的检索评测（recall@k / 命中率 / MRR），
+调参前先跑基线，改配置后对比量化结果，详见 [evaluation/README.md](evaluation/README.md)。
 
 ### 5. 知识图谱构建
 

@@ -30,6 +30,13 @@ faiss_index/
 # 本地存储的 Qdrant 数据
 qdrant_storage/
 
+# BM25 检索器持久化缓存（运行时生成）
+bm25_cache/
+context_cache/
+
+# 评测报告输出（评测集本身入库）
+evaluation/results/
+
 # IDE / 编辑器
 .idea/
 .vscode/

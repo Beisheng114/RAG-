@@ -214,6 +214,81 @@ class GenerationIntegrationModule:
             logger.error(f"LightRAG答案生成失败: {e}")
             return f"抱歉，生成回答时出现错误：{str(e)}"
 
+    def rewrite_query(self, question: str, conversation_history: Optional[List[Dict]] = None, max_history_turns: int = 3) -> str:
+        """
+        多轮对话查询改写（指代消解），用于检索前的查询补全
+
+        将"它怎么修？""这个设备还有什么故障？"等依赖上文的问题改写为
+        独立完整的问题，避免直接拿原文检索导致召回丢失。
+
+        任何失败（LLM不可用/超时/输出异常）均降级返回原问题，不影响主链路。
+
+        Args:
+            question: 当前用户问题
+            conversation_history: 对话历史 [{"role": "user"/"assistant", "content": ...}, ...]
+            max_history_turns: 参与改写的最近历史轮数
+
+        Returns:
+            改写后的独立问题；无需改写或失败时返回原问题
+        """
+        if not conversation_history:
+            return question
+
+        # 取最近的几轮历史
+        recent = conversation_history[-max_history_turns * 2:]
+        history_lines = []
+        for msg in recent:
+            role = msg.get("role", "user")
+            content = str(msg.get("content", ""))[:300]
+            history_lines.append(f"{'用户' if role == 'user' else '助手'}: {content}")
+        history_text = "\n".join(history_lines)
+
+        prompt = f"""以下是一段关于船舶故障维修的多轮对话历史：
+
+{history_text}
+
+用户的新问题是："{question}"
+
+请把新问题改写成一个不依赖对话历史、可以独立理解的完整问题（指代消解）。
+要求：
+- 只输出改写后的问题本身，不要任何解释、前缀或引号
+- 保留原问题中的设备/系统/部件等关键实体
+- 如果新问题本身已经独立完整，直接原样输出该问题
+改写后的问题："""
+
+        try:
+            if self.llm_provider == "ollama":
+                url = f"{self.ollama_base_url}/api/chat"
+                payload = {
+                    "model": self.ollama_model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "stream": False,
+                    "options": {"temperature": 0.0, "num_predict": 256}
+                }
+                response = requests.post(url, json=payload, timeout=15)
+                response.raise_for_status()
+                rewritten = response.json()["message"]["content"].strip()
+            else:
+                response = self.client.chat.completions.create(
+                    model=self.model_name,
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.0,
+                    max_tokens=256
+                )
+                rewritten = response.choices[0].message.content.strip()
+
+            # 清洗：取首行、去包裹引号
+            rewritten = rewritten.splitlines()[0].strip().strip('"“”').strip()
+
+            # 合理性校验：长度异常视为改写失败
+            if not rewritten or len(rewritten) > 200:
+                return question
+            logger.info(f"查询改写: {question} -> {rewritten}")
+            return rewritten
+        except Exception as e:
+            logger.warning(f"查询改写失败，使用原问题检索: {e}")
+            return question
+
     def generate_adaptive_answer_stream(self, question: str, documents: List[Document], conversation_history: Optional[List[Dict]] = None, max_retries: int = 3):
         """
         LightRAG风格的流式答案生成（带重试机制）
