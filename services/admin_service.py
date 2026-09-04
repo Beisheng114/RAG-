@@ -11,31 +11,14 @@ from neo4j import GraphDatabase
 
 from config import DEFAULT_CONFIG
 from core.system_context import get_rag_system
+from core.security import (
+    get_admin_token,
+    is_admin_enabled,
+    require_admin,
+    mask_secret,
+    is_sensitive_config_key,
+)
 from csv_to_neo4j import CSVToNeo4jImporter
-
-
-ADMIN_TOKEN = os.getenv("RAG_ADMIN_TOKEN", "123456")
-
-
-def require_admin(x_admin_token: str = Header(default=None, alias="X-Admin-Token")) -> bool:
-    if not x_admin_token or x_admin_token != ADMIN_TOKEN:
-        raise HTTPException(status_code=401, detail="管理员认证失败")
-    return True
-
-
-def mask_secret(value: str, left: int = 3, right: int = 2) -> str:
-    v = str(value or "")
-    if not v:
-        return ""
-    if len(v) <= left + right:
-        return "*" * len(v)
-    return f"{v[:left]}{'*' * (len(v) - left - right)}{v[-right:]}"
-
-
-def is_sensitive_config_key(key: str) -> bool:
-    lk = key.lower()
-    sensitive_tokens = ["password", "secret", "token", "api_key", "key"]
-    return any(t in lk for t in sensitive_tokens)
 
 
 def get_safe_config_preview() -> Dict[str, Any]:
@@ -48,7 +31,9 @@ def get_safe_config_preview() -> Dict[str, Any]:
             safe_cfg[k] = v
 
     safe_cfg["deepseek_api_key"] = mask_secret(os.getenv("DEEPSEEK_API_KEY", ""))
-    safe_cfg["rag_admin_token_hint"] = mask_secret(ADMIN_TOKEN)
+    admin_token = get_admin_token()
+    safe_cfg["rag_admin_token_hint"] = mask_secret(admin_token or "")
+    safe_cfg["admin_enabled"] = is_admin_enabled()
     return safe_cfg
 
 

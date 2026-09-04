@@ -1,19 +1,31 @@
 """
 基于图数据库的RAG系统配置文件
+
+敏感凭证（Neo4j 密码、管理口令、API Key 等）一律通过环境变量或 .env 文件
+注入，代码中不保留任何默认密码。参见 .env.example。
+
+注意：本模块是配置链最底层，在此处调用 load_dotenv()，确保任何入口
+（app.py / ragmain.py / csv_to_neo4j.py）import 配置时 .env 已生效。
 """
 
+import os
 from dataclasses import dataclass
 from typing import Dict, Any
+
+from dotenv import load_dotenv
+
+# 先于字段默认值求值加载 .env（幂等，重复调用无副作用）
+load_dotenv()
 
 @dataclass
 class GraphRAGConfig:
     """基于图数据库的RAG系统配置类"""
 
-    # Neo4j数据库配置
-    neo4j_uri: str = "bolt://localhost:7687"
-    neo4j_user: str = "neo4j"
-    neo4j_password: str = "myrag123456"
-    neo4j_database: str = "neo4j"
+    # Neo4j数据库配置（凭证通过环境变量注入，见 .env.example；不内置默认密码）
+    neo4j_uri: str = os.getenv("NEO4J_URI", "bolt://localhost:7687")
+    neo4j_user: str = os.getenv("NEO4J_USER", "neo4j")
+    neo4j_password: str = os.getenv("NEO4J_PASSWORD", "")
+    neo4j_database: str = os.getenv("NEO4J_DATABASE", "neo4j")
 
     # 向量索引类型：当前仅支持 "qdrant"（Milvus 后端已移除）
     vector_index_type: str = "qdrant"

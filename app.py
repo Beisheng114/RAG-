@@ -1,20 +1,17 @@
-from fastapi import FastAPI, HTTPException, Depends, UploadFile, File, Form, Header
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.responses import StreamingResponse, FileResponse, JSONResponse
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 import uuid
 import json
 import os
-import shutil
-import zipfile
 from urllib.parse import quote
 from pathlib import Path
 from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor, as_completed,ThreadPoolExecutor
 from ragmain import AdvancedGraphRAGSystem
-from config import DEFAULT_CONFIG
 from core.system_context import set_rag_system
+from core.security import get_api_key, get_cors_origins, check_api_access
 from routers.admin_routes import router as admin_router
 from routers.kg_import_routes import router as kg_import_router
 from routers.graph_routes import router as graph_router
@@ -167,14 +164,36 @@ async def startup_event():
     set_rag_system(rag_system)
     print("RAG系统初始化完成！")
 
-# 配置CORS
+# 配置CORS（白名单可通过环境变量 RAG_CORS_ORIGINS 覆盖，逗号分隔；
+# 禁止与 allow_credentials=True 组合使用 "*"，详见 core/security.py）
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 在生产环境中应该设置具体的前端域名
+    allow_origins=get_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def api_key_guard(request, call_next):
+    """可选的 API 鉴权中间件
+
+    设置环境变量 RAG_API_KEY 后，所有 /api/* 请求需携带有效的
+    X-API-Key（或 X-Admin-Token）头；未设置时维持本地部署的默认行为。
+    CORS 预检请求（OPTIONS）直接放行。
+    """
+    if (
+        get_api_key() is not None
+        and request.method != "OPTIONS"
+        and request.url.path.startswith("/api/")
+        and not check_api_access(request.headers)
+    ):
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "缺少或无效的 X-API-Key 请求头"},
+        )
+    return await call_next(request)
 
 # 对话管理
 conversations: Dict[str, Dict] = {}
@@ -309,99 +328,6 @@ def load_conversations():
 
 # 加载现有对话
 load_conversations()
-
-# 简易管理口令（建议通过环境变量注入）
-ADMIN_TOKEN = os.getenv("RAG_ADMIN_TOKEN", "admin123")
-
-
-def _require_admin(x_admin_token: Optional[str] = Header(default=None, alias="X-Admin-Token")) -> bool:
-    if not x_admin_token or x_admin_token != ADMIN_TOKEN:
-        raise HTTPException(status_code=401, detail="管理员认证失败")
-    return True
-
-
-def _mask_secret(value: str, left: int = 3, right: int = 2) -> str:
-    v = str(value or "")
-    if not v:
-        return ""
-    if len(v) <= left + right:
-        return "*" * len(v)
-    return f"{v[:left]}{'*' * (len(v) - left - right)}{v[-right:]}"
-
-
-def _is_sensitive_config_key(key: str) -> bool:
-    lk = key.lower()
-    sensitive_tokens = ["password", "secret", "token", "api_key", "key"]
-    return any(t in lk for t in sensitive_tokens)
-
-
-def _get_safe_config_preview() -> Dict[str, Any]:
-    cfg = DEFAULT_CONFIG.to_dict()
-    safe_cfg: Dict[str, Any] = {}
-    for k, v in cfg.items():
-        if _is_sensitive_config_key(k):
-            safe_cfg[k] = _mask_secret(str(v))
-        else:
-            safe_cfg[k] = v
-
-    safe_cfg["deepseek_api_key"] = _mask_secret(os.getenv("DEEPSEEK_API_KEY", ""))
-    safe_cfg["rag_admin_token_hint"] = _mask_secret(ADMIN_TOKEN)
-    return safe_cfg
-
-
-def _make_backup_zip() -> Dict[str, Any]:
-    backup_root = Path("backups")
-    backup_root.mkdir(parents=True, exist_ok=True)
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    zip_path = backup_root / f"kg_qdrant_backup_{ts}.zip"
-
-    include_paths = [
-        Path("conversations"),
-        Path("generate_csv"),
-        Path("csv_generate"),
-        Path("config.py"),
-    ]
-
-    # 尝试纳入本地 Qdrant 数据目录（如果使用本地卷）
-    qdrant_local_dir = os.getenv("QDRANT_LOCAL_DATA_DIR", "")
-    if qdrant_local_dir:
-        include_paths.append(Path(qdrant_local_dir))
-
-    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        for p in include_paths:
-            if not p.exists():
-                continue
-            if p.is_file():
-                zf.write(p, arcname=str(p))
-            else:
-                for file in p.rglob("*"):
-                    if file.is_file():
-                        zf.write(file, arcname=str(file))
-
-    return {"backup_file": str(zip_path).replace("\\", "/")}
-
-
-def _restore_backup_zip(zip_file: UploadFile) -> Dict[str, Any]:
-    restore_root = Path("backup_restores")
-    restore_root.mkdir(parents=True, exist_ok=True)
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    zip_name = f"restore_{ts}_{zip_file.filename or 'backup.zip'}"
-    zip_path = restore_root / zip_name
-
-    content = zip_file.file.read()
-    with open(zip_path, "wb") as f:
-        f.write(content)
-
-    target = restore_root / f"extracted_{ts}"
-    target.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(zip_path, "r") as zf:
-        zf.extractall(target)
-
-    return {
-        "uploaded_backup": str(zip_path).replace("\\", "/"),
-        "extracted_to": str(target).replace("\\", "/"),
-        "note": "已解压备份文件。生产环境请在校验后执行覆盖恢复或专用恢复脚本。",
-    }
 
 # API端点
 @app.post("/api/conversations", response_model=Conversation)

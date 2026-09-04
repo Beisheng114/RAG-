@@ -127,6 +127,20 @@ qdrant_collection_name: str = "ship_maintenance_knowledge"
 qdrant_vector_size: int = 768    # 与 bge-base-zh-v1.5 的维度一致
 ```
 
+### 安全配置（重要）
+
+所有敏感凭证通过环境变量或 `.env` 文件注入（参见 `.env.example`），代码中不再保留任何默认密码：
+
+| 环境变量 | 说明 |
+|---|---|
+| `NEO4J_PASSWORD` | Neo4j 密码（必填） |
+| `RAG_ADMIN_TOKEN` | 管理接口口令；**不设置时管理接口直接禁用（503）**，不再回退弱默认值 |
+| `RAG_API_KEY` | 可选；设置后所有 `/api/*` 请求需携带 `X-API-Key` 请求头（携带有效 `X-Admin-Token` 的管理页面请求除外） |
+| `RAG_CORS_ORIGINS` | CORS 白名单（逗号分隔），默认仅放行本机 8002 端口 |
+| `DEEPSEEK_API_KEY` | 使用 DeepSeek 提供方时填写 |
+
+> **安全提醒**：早期版本曾将 Neo4j 密码硬编码并公开在仓库中。如果你部署时使用过该密码，请**立即在 Neo4j 侧轮换密码**（`ALTER CURRENT USER SET PASSWORD FROM 'old' TO 'new'`），再通过 `NEO4J_PASSWORD` 注入新密码。
+
 ### 启动服务
 
 1. **使用启动脚本**
