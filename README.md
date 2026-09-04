@@ -36,25 +36,30 @@
 ## 目录结构
 
 ```
-├── app.py                # FastAPI应用入口
+├── app.py                # FastAPI应用入口（装配层）
 ├── ragmain.py           # 主程序入口（CLI交互）
-├── config.py            # 配置文件
+├── config.py            # 配置文件（凭证走环境变量）
 ├── requirements.txt     # 依赖项
-├── download_model.py    # 嵌入模型下载脚本
+├── .env.example         # 环境变量模板（复制为 .env 使用）
+├── Dockerfile / docker-compose.yml / .dockerignore  # 容器化部署
+├── download_model.py    # 模型下载脚本（嵌入/精排）
 ├── csv_to_neo4j.py      # CSV知识数据导入Neo4j工具
 ├── 启动.bat / 关闭.bat   # Windows启动/关闭脚本
 ├── 启动                  # Linux/Mac启动脚本
-├── core/                # 应用共享上下文
-│   └── system_context.py            # RAG系统全局实例管理
+├── core/                # 应用核心
+│   ├── system_context.py            # RAG系统全局实例管理
+│   ├── security.py                  # 鉴权/CORS/API Key（统一安全实现）
+│   └── rrf.py                       # RRF融合纯函数（可单测）
 ├── rag_modules/         # RAG核心模块
-│   ├── hybrid_retrieval.py          # 混合检索模块（向量+BM25+图，RRF融合）
+│   ├── hybrid_retrieval.py          # 混合检索模块（向量+BM25+图，RRF融合，BM25持久化）
 │   ├── graph_rag_retrieval.py       # 图RAG检索
 │   ├── qdrant_index_construction.py # Qdrant索引构建
+│   ├── reranker.py                  # Rerank精排（bge-reranker，可降级）
 │   ├── graph_data_preparation.py    # 图数据准备
 │   ├── graph_data_insert.py         # 图数据插入（LLM抽取）
 │   ├── graph_indexing.py            # 图索引构建
 │   ├── intelligent_query_router.py  # 智能查询路由
-│   ├── generation_integration.py    # 生成集成
+│   ├── generation_integration.py    # 生成集成（含查询改写）
 │   └── context_manager.py           # 上下文管理
 ├── routers/             # API路由
 │   ├── admin_routes.py              # 管理路由
@@ -62,12 +67,18 @@
 │   ├── kg_import_routes.py          # 知识图谱导入路由
 │   └── page_routes.py               # 页面路由
 ├── services/            # 服务层
+│   ├── conversation_store.py        # 对话SQLite存储（线程安全+旧JSON迁移）
+│   ├── conversation_service.py      # 对话管理服务
+│   ├── case_state_service.py        # 维修过程记录（case state）
+│   ├── export_service.py            # 对话导出（JSON/Markdown）
 │   ├── admin_service.py             # 管理服务
 │   ├── graph_service.py             # 图查询服务
 │   └── kg_import_service.py         # 知识图谱导入服务
+├── evaluation/          # 检索质量评测（recall@k / MRR）
+├── tests/               # 最小pytest冒烟测试
 ├── static/              # 静态文件（Web界面）
 ├── models/              # 模型存储（git忽略，download_model.py下载）
-└── conversations/       # 对话记录存储（git忽略，运行时生成）
+└── conversations/       # 旧版对话JSON（自动迁移进SQLite后可删除）
 ```
 
 ## 快速开始
@@ -173,6 +184,40 @@ ollama serve
 
 # 运行FastAPI应用
 python app.py
+```
+
+3. **Docker Compose 一键启动（推荐试用方式）**
+
+```bash
+# 1) 准备环境变量
+cp .env.example .env
+# 编辑 .env，至少设置 NEO4J_PASSWORD
+
+# 2) 下载模型到宿主机（挂载进容器，避免打进镜像）
+python download_model.py --all
+
+# 3) 启动 Qdrant + Neo4j + 应用
+docker compose up -d
+
+# 4) 访问
+# 应用: http://localhost:8002
+# Neo4j 浏览器: http://localhost:7474
+```
+
+说明：
+- Ollama 建议跑在宿主机（模型文件大），compose 中应用通过
+  `host.docker.internal:11434` 访问（Linux 由 `extra_hosts` 映射支持）
+- 数据卷：`qdrant_storage`（向量）、`neo4j_data`（图谱）、`app_data`（对话
+  SQLite）、`app_exports`（导出文件），重建容器不丢数据
+
+### 运行测试
+
+最小冒烟测试（不依赖 Neo4j/Qdrant/模型，覆盖配置约束、安全模块、
+RRF 融合纯函数、SQLite 对话存储与并发写）：
+
+```bash
+pip install -r requirements.txt pytest
+pytest tests/ -v
 ```
 
 ### 访问系统

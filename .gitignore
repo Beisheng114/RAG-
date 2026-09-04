@@ -26,6 +26,10 @@ llm_debug/
 faiss_index/
 *.sqlite3
 *.db
+*.db-shm
+*.db-wal
+*.sqlite3-shm
+*.sqlite3-wal
 
 # 本地存储的 Qdrant 数据
 qdrant_storage/

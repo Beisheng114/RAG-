@@ -31,9 +31,9 @@ class GraphRAGConfig:
     vector_index_type: str = "qdrant"
 
     # Qdrant配置
-    qdrant_host: str = "localhost"
-    qdrant_port: int = 6333
-    qdrant_grpc_port: int = 6334
+    qdrant_host: str = os.getenv("QDRANT_HOST", "localhost")
+    qdrant_port: int = int(os.getenv("QDRANT_PORT", "6333"))
+    qdrant_grpc_port: int = int(os.getenv("QDRANT_GRPC_PORT", "6334"))
     qdrant_prefer_grpc: bool = True
     qdrant_collection_name: str = "ship_maintenance_knowledge"
     qdrant_vector_size: int = 768  # BGE-base-zh-v1.5的向量维度（bge-base 为 768 维）
@@ -55,7 +55,7 @@ class GraphRAGConfig:
     deepseek_base_url: str = "https://api.deepseek.com"
 
     # Ollama配置（当llm_provider为ollama时使用）
-    ollama_base_url: str = "http://localhost:11434"
+    ollama_base_url: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     ollama_model: str = "kamekichi128/qwen3-4b-instruct-2507"  # Ollama中的模型名称
     # ollama_model:str = "qwen3.5:2b"
     

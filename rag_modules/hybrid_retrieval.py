@@ -17,6 +17,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from langchain_core.documents import Document
 from langchain_community.retrievers import BM25Retriever
 from neo4j import GraphDatabase
+from core.rrf import rrf_fuse
 from .graph_indexing import GraphIndexingModule
 
 logger = logging.getLogger(__name__)
@@ -1063,35 +1064,22 @@ class HybridRetrievalModule:
                     return str(node_id)
                 return str(hash(doc.page_content[:200]))
 
-            def _rrf_score(rank: int, k: int = 60) -> float:
-                return 1.0 / (k + rank)
+            # RRF 融合（纯函数实现在 core/rrf.py，便于单元测试）
+            ranked = rrf_fuse(
+                {
+                    "vector": vector_documents,
+                    "bm25": bm25_docs,
+                    "graph": graph_docs,
+                },
+                doc_id_fn=_doc_id,
+            )
 
-            fused: Dict[str, Dict[str, Any]] = {}
+            logger.info("RRF融合完成，候选数: %s", len(ranked))
 
-            def _add_docs(docs: List[Document], channel: str):
-                for idx, doc in enumerate(docs, start=1):
-                    doc_id = _doc_id(doc)
-                    score = _rrf_score(idx)
-                    if doc_id not in fused:
-                        fused[doc_id] = {
-                            "doc": doc,
-                            "score": 0.0,
-                            "channels": set()
-                        }
-                    fused[doc_id]["score"] += score
-                    fused[doc_id]["channels"].add(channel)
-
-            _add_docs(vector_documents, "vector")
-            _add_docs(bm25_docs, "bm25")
-            _add_docs(graph_docs, "graph")
-
-            logger.info("RRF融合完成，候选数: %s", len(fused))
-
-            ranked = sorted(fused.values(), key=lambda x: x["score"], reverse=True)
             documents = []
             for item in ranked[:top_k]:
                 doc = item["doc"]
-                channels = sorted(item["channels"])
+                channels = item["channels"]
                 doc.metadata.update({
                     "search_method": "rrf_fusion",
                     "rrf_score": item["score"],

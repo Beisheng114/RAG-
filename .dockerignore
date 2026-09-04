@@ -1,0 +1,39 @@
+# 版本控制与IDE
+.git
+.gitignore
+.idea
+.vscode
+
+# Python 运行时产物
+__pycache__
+*.py[cod]
+.pytest_cache
+.venv
+venv
+
+# 大文件目录（模型走卷挂载，数据走数据库）
+models
+qdrant_storage
+neo4j_data
+data
+uploads
+bm25_cache
+context_cache
+conversations
+conversations.db
+exports
+backups
+backup_restores
+source
+llm_debug
+evaluation/results
+
+# 本地环境配置
+.env
+.env.*
+
+# 文档与容器配置自身
+*.md
+Dockerfile
+docker-compose.yml
+.dockerignore
