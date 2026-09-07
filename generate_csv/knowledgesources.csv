@@ -1,0 +1,5 @@
+﻿source_id,name,type,chapter,section,reliability
+SRC-001,船舶电气设备维护手册,manual,第四章 发电机,4.2 常见故障,high
+SRC-002,船舶电气设备维护手册,manual,第五章 配电系统,5.1 主配电板,high
+SRC-003,主机操作与维护规程,manual,第七章 故障处理,7.3 启动系统,high
+SRC-004,轮机员速查手册,handbook,电气分册,应急处理,medium

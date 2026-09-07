@@ -211,8 +211,10 @@ class AdvancedGraphRAGSystem:
             # 构建出的文档数为 0，chunk_documents 会抛 ValueError 导致应用
             # 崩溃重启循环。降级为"空知识库就绪"：应用正常启动、页面可用，
             # 问答返回引导提示；导入数据后重启即自动构建。
-            chunks = self.data_module.chunks or []
-            if not chunks:
+            # 注意判断依据是 documents（build_documents 的产物）而非
+            # chunks——chunks 在此刻尚未生成，恒为空。
+            documents = getattr(self.data_module, "documents", None) or []
+            if not documents:
                 logger.warning(
                     "Neo4j 中没有知识数据（文档数为 0）。系统将以空知识库模式启动："
                     "问答将提示无结果。请导入 CSV 知识数据"
@@ -221,6 +223,7 @@ class AdvancedGraphRAGSystem:
                 )
                 self.system_ready = True
                 return
+            chunks = documents
 
             logger.info("进行文档分块...")
             chunks = self.data_module.chunk_documents(

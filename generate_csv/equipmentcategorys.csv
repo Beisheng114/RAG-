@@ -1,0 +1,4 @@
+﻿category_id,name,description,source_id
+CAT-01,电气系统,船舶电力 generation/配电/用电设备,SRC-001
+CAT-02,动力系统,主机及推进相关设备,SRC-003
+CAT-03,辅助机械,泵、压缩机、换热器等辅机,SRC-004

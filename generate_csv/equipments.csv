@@ -1,0 +1,7 @@
+﻿equipment_id,name,type,model,source_id
+EQ-001,主发电机,发电机,TFXW-500,SRC-001
+EQ-002,应急发电机,发电机,TFXW-64,SRC-001
+EQ-003,主配电板,配电设备,PANEL-MSB,SRC-002
+EQ-004,主机,柴油机,6S50ME-C,SRC-003
+EQ-005,空气压缩机,辅机,AC-2.5,SRC-004
+EQ-006,艉轴管润滑系统,辅助系统,STERN-TUBE,SRC-004

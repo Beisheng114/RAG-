@@ -14,6 +14,8 @@ qdrant-client>=1.9,<2.0
 langchain-core>=0.2,<0.4
 langchain-community>=0.2,<0.4
 langchain-huggingface>=0.1,<0.2
+# BM25Retriever（langchain_community）的实际后端，缺失则检索器初始化失败
+rank_bm25>=0.2.2,<0.3
 
 # 嵌入/重排模型
 sentence-transformers>=2.7,<4.0
