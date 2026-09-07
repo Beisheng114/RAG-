@@ -21,6 +21,11 @@ import sys
 
 import requests
 
+# 防御：compose 的 ${HF_ENDPOINT:-} 会注入空字符串，huggingface_hub 读到
+# 空值会拼出无 scheme 的 URL（Invalid URL 瞬间报错），必须清掉让库回退默认
+if os.environ.get("HF_ENDPOINT", "").strip() == "":
+    os.environ.pop("HF_ENDPOINT", None)
+
 MODELSCOPE_BASE = "https://www.modelscope.cn"
 
 # 模型清单：模型ID（HF/魔搭通用） -> 本地存储路径

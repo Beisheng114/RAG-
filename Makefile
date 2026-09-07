@@ -11,8 +11,8 @@ help: ## 显示所有可用命令
 env: ## 初始化本地配置（从模板生成 .env）
 	@test -f .env && echo ".env 已存在，跳过" || (cp .env.example .env && echo "已生成 .env，请编辑填写 NEO4J_PASSWORD")
 
-up: ## 启动全部服务（后台）
-	docker compose up -d
+up: ## 启动全部服务（后台，先确保镜像为最新代码）
+	docker compose up -d --build
 
 down: ## 停止并移除容器（数据卷保留）
 	docker compose down
@@ -35,13 +35,13 @@ rebuild: ## 无缓存重建镜像
 # ---------- 工具（对应 compose 的 tools profile） ----------
 
 download-models: ## 下载嵌入+精排模型到 ./models（容器内执行）
-	docker compose run --rm model-download
+	docker compose run --rm --build model-download
 
 init-csv: ## 清空 Neo4j 并导入 ./generate_csv 的 CSV（危险：会覆盖图谱）
-	docker compose run --rm csv-import
+	docker compose run --rm --build csv-import
 
 eval: ## 运行检索评测（recall@k / MRR），报告存 evaluation/results/
-	docker compose run --rm eval
+	docker compose run --rm --build eval
 
 test: ## 本地跑 pytest 冒烟测试（不走容器）
 	python3 -m pytest tests/ -v
