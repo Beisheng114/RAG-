@@ -207,6 +207,21 @@ class AdvancedGraphRAGSystem:
             logger.info("构建设备文档...")
             self.data_module.build_documents()
 
+            # 冷启动保护：Neo4j 无知识数据时（全新部署、尚未导入 CSV），
+            # 构建出的文档数为 0，chunk_documents 会抛 ValueError 导致应用
+            # 崩溃重启循环。降级为"空知识库就绪"：应用正常启动、页面可用，
+            # 问答返回引导提示；导入数据后重启即自动构建。
+            chunks = self.data_module.chunks or []
+            if not chunks:
+                logger.warning(
+                    "Neo4j 中没有知识数据（文档数为 0）。系统将以空知识库模式启动："
+                    "问答将提示无结果。请导入 CSV 知识数据"
+                    "（放入 ./generate_csv 后执行 make init-csv 或"
+                    " docker compose run --rm csv-import），然后重启应用。"
+                )
+                self.system_ready = True
+                return
+
             logger.info("进行文档分块...")
             chunks = self.data_module.chunk_documents(
                 chunk_size=self.config.chunk_size,

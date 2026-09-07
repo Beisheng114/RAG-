@@ -33,16 +33,17 @@ try:
         Distance, VectorParams, PointStruct,
         Filter, FieldCondition, MatchValue, MatchText,
         Range, IsEmptyCondition, IsNullCondition,
-        SearchRequest, RecommendRequest,
         HasIdCondition
     )
+    # 注意：代码实际使用的符号全集见上（SearchRequest/RecommendRequest 是
+    # 历史遗留的死导入，qdrant-client>=1.15 已移除该符号，导入即失败）
     IsEmpty = IsEmptyCondition
     IsNull = IsNullCondition
     HasId = HasIdCondition
     QDRANT_AVAILABLE = True
 except ImportError as e:
     QDRANT_AVAILABLE = False
-    logger.warning(f"qdrant-client未安装，请运行: pip install qdrant-client。错误: {e}")
+    logger.warning(f"qdrant-client未安装或版本不兼容，请运行: pip install 'qdrant-client>=1.9,<2.0'。错误: {e}")
 except Exception as e:
     QDRANT_AVAILABLE = False
     logger.warning(f"qdrant-client导入失败: {type(e).__name__}: {e}")
