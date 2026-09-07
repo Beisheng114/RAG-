@@ -31,12 +31,17 @@ class TestConfig:
             GraphRAGConfig(vector_index_type="milvus")
 
     def test_no_hardcoded_password(self):
-        """修复 issue #1：代码中不得保留默认密码"""
+        """修复 issue #1：代码中不得保留默认密码
+
+        断言环境无关：密码值必须与 env/.env 注入一致（本地存在 .env 时
+        为用户配置值，否则为空），代码侧默认值只能来自环境变量。
+        """
         import config
         from config import GraphRAGConfig
         src = open(config.__file__, encoding="utf-8").read()
         assert "myrag123456" not in src
-        assert GraphRAGConfig().neo4j_password == ""
+        # 配置值必须等于 env 注入值（无 env 时为空），证明无硬编码默认
+        assert GraphRAGConfig().neo4j_password == os.getenv("NEO4J_PASSWORD", "")
 
     def test_to_dict_fields(self):
         from config import GraphRAGConfig

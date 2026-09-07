@@ -120,6 +120,11 @@ python download_model.py --rerank
 # ollama pull qwen2.5:7b
 ```
 
+**下载源**：默认自动探测——HuggingFace 不可达（国内/企业网络常见）时自动改走
+[魔搭 ModelScope](https://www.modelscope.cn)（两模型均有官方镜像，无需配置）。
+显式指定：`--source modelscope` / `--source huggingface`；HF 镜像端点可用
+环境变量 `HF_ENDPOINT`（如 `https://hf-mirror.com`）覆盖。
+
 ### 配置设置
 
 编辑 `config.py` 文件，或通过环境变量（推荐，见下方"安全配置"）设置以下参数：

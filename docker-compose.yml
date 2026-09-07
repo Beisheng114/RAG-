@@ -108,6 +108,9 @@ services:
     profiles: ["tools"]
     environment:
       - RAG_SKIP_WAIT=1
+      # 模型下载源：默认自动探测（HF 不可达走魔搭 ModelScope）；
+      # 也可显式指定镜像，如 HF_ENDPOINT=https://hf-mirror.com
+      - HF_ENDPOINT=${HF_ENDPOINT:-}
     volumes:
       - ./models:/app/models
     command: ["python", "download_model.py", "--all"]
