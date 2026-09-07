@@ -1,7 +1,9 @@
-# Web 框架
+# Web 框架（python-multipart：Form/File 上传接口的必需运行时依赖，
+# 缺失时 FastAPI 在导入路由阶段直接 RuntimeError，应用无法启动）
 fastapi>=0.110,<1.0
 uvicorn>=0.29,<1.0
 pydantic>=2.6,<3.0
+python-multipart>=0.0.9
 
 # 数据库
 neo4j>=5.19,<6.0

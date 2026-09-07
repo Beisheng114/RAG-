@@ -49,6 +49,38 @@ class TestConfig:
             assert k in d
 
 
+# ---------- app 装配（导入链完整性） ----------
+
+class TestAppAssembly:
+    def test_app_importable_and_routes(self):
+        """import app 必须成功且路由注册完整。
+
+        历史 bug：app.py 曾从 case_state_service 导入实际定义在
+        conversation_service 的 generate_conversation_title，导致
+        `import app` 直接 ImportError（应用无法启动）。此前测试从未导入
+        app 模块所以漏检——本用例补上该盲区。
+
+        本地缺 neo4j/qdrant 等重依赖时跳过（容器/CI 中真实执行）。
+        """
+        import importlib
+        try:
+            app_mod = importlib.import_module("app")
+        except Exception as e:
+            msg = f"{type(e).__name__}: {e}"
+            third_party = (
+                "neo4j", "qdrant", "sentence_transformers", "transformers",
+                "langchain", "openai", "pandas", "multipart",
+            )
+            if any(t in msg for t in third_party):
+                pytest.skip(f"本地缺第三方依赖，跳过装配测试（{msg[:80]}）")
+            raise
+        paths = {getattr(r, "path", "") for r in app_mod.app.routes}
+        for required in ("/api/query", "/api/conversations",
+                         "/api/conversations/{conversation_id}/case-state",
+                         "/api/export/{conversation_id}"):
+            assert required in paths, f"路由缺失: {required}"
+
+
 # ---------- 路由快速路径 ----------
 
 class TestRouterFastPath:

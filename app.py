@@ -31,11 +31,10 @@ from routers.admin_routes import router as admin_router
 from routers.kg_import_routes import router as kg_import_router
 from routers.graph_routes import router as graph_router
 from routers.page_routes import router as page_router
-from services.conversation_service import get_conversation_service
+from services.conversation_service import get_conversation_service, generate_conversation_title
 from services.case_state_service import (
     default_case_state,
     ensure_conversation_case_state,
-    generate_conversation_title,
     _build_fault_context_system_note,
     _is_model_refusal,
     _clear_case_draft,
