@@ -49,6 +49,70 @@ class TestConfig:
             assert k in d
 
 
+# ---------- 路由快速路径 ----------
+
+class TestRouterFastPath:
+    @staticmethod
+    def _load_router_module():
+        """按文件直载路由器模块，绕过 rag_modules/__init__ 的重依赖导入链
+        （neo4j/qdrant 等），使路由决策逻辑可离线单测"""
+        import importlib.util
+        mod_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "rag_modules", "intelligent_query_router.py",
+        )
+        spec = importlib.util.spec_from_file_location("iqr_standalone", mod_path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+
+    @classmethod
+    def _make_router(cls, fast_path=True):
+        """构造不依赖外部服务的路由器实例"""
+        mod = cls._load_router_module()
+        cfg = type("C", (), {
+            "use_intelligent_router": True,
+            "router_fast_path": fast_path,
+            "llm_provider": "ollama",
+            "ollama_base_url": "http://localhost:1",  # 不可达，若被调用会走降级
+            "ollama_model": "test",
+        })()
+        return mod.IntelligentQueryRouter(
+            traditional_retrieval=None, graph_rag_retrieval=None,
+            llm_client=None, config=cfg,
+        )
+
+    def test_simple_query_skips_llm(self):
+        """简单查询（无复杂度/关系信号词）应走快速路径，不触发 LLM"""
+        router = self._make_router(fast_path=True)
+        # 无信号词查询：规则 complexity=0, relation=0 → 快速路径
+        analysis = router.analyze_query("发电机异响")
+        assert analysis.recommended_strategy.value == "hybrid_traditional"
+        assert "快速路径" in analysis.reasoning or analysis.reasoning == "基于规则的简单分析"
+
+    def test_complex_query_still_uses_llm_path(self):
+        """复杂查询（含关系词）不走快速路径 → 尝试 LLM（不可达）→ 降级规则"""
+        router = self._make_router(fast_path=True)
+        # "导致"是关系词 → relation_intensity > 0 → 跳过快速路径
+        analysis = router.analyze_query("燃油杂质导致主机什么问题")
+        # LLM 不可达，降级到规则分析，但 reasoning 应标明是降级而非快速路径
+        assert analysis.reasoning == "基于规则的简单分析"
+
+    def test_fast_path_disabled(self):
+        """router_fast_path=False 时全部走 LLM 路径（不可达则降级）"""
+        router = self._make_router(fast_path=False)
+        analysis = router.analyze_query("发电机异响")
+        # 未走快速路径：reasoning 是规则降级输出（LLM 不可达）
+        assert analysis.reasoning == "基于规则的简单分析"
+
+    def test_rule_thresholds(self):
+        """规则分析的阈值逻辑：高复杂度 → GRAPH_RAG"""
+        router = self._make_router()
+        # 命中多个复杂度词（为什么/如何/原因/故障/维修/步骤/注意事项...）
+        analysis = router._rule_based_analysis("为什么故障频发，如何维修以及步骤注意事项")
+        assert analysis.recommended_strategy.value == "graph_rag"
+
+
 # ---------- security ----------
 
 class TestSecurity:
@@ -253,16 +317,12 @@ class TestConversationStore:
 class TestCaseStateCompat:
     def test_default_and_ensure(self, tmp_path, monkeypatch):
         """ensure_conversation_case_state 对旧数据补齐结构"""
-        # 使用独立实例避免污染模块级单例
-        from services.conversation_store import ConversationStore
+        # 使用独立实例，通过 get_conversation_service 工厂注入
         from services.conversation_service import ConversationService
         from services import case_state_service as css
 
         svc = ConversationService(str(tmp_path / "case.db"))
-        # 替换模块级引用
-        monkeypatch.setattr(css.conversation_service, "_cache", svc.store and {})
-        # 直接构造干净服务替换
-        monkeypatch.setattr(css, "conversation_service", svc)
+        monkeypatch.setattr(css, "get_conversation_service", lambda: svc)
 
         svc.create("t", case_state=None)
         conv_id = svc.list_all()[0]["id"]
@@ -282,3 +342,37 @@ class TestCaseStateCompat:
         state = svc.get(conv_id)["case_state"]
         assert "draft" in state and "todo" in state
         svc.close()
+
+
+# ---------- 惰性单例 ----------
+
+class TestLazySingleton:
+    def test_import_has_no_side_effect(self, tmp_path):
+        """import 模块不应创建 SQLite 文件（修复：模块级实例化的 import 副作用）"""
+        import subprocess
+        import sys
+
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        code = (
+            "import sys; sys.path.insert(0, '.'); "
+            "import os; "
+            "import services.conversation_service; "
+            "print('OK' if not os.path.exists(os.environ['CONVERSATIONS_DB_PATH']) else 'CREATED')"
+        )
+        r = subprocess.run(
+            [sys.executable, "-c", code],
+            cwd=project_root,
+            capture_output=True, text=True,
+            env={**os.environ, "CONVERSATIONS_DB_PATH": str(tmp_path / "lazy.db")},
+        )
+        assert "OK" in r.stdout, f"import 产生了副作用: {r.stdout} {r.stderr}"
+
+    def test_get_returns_same_instance(self):
+        from services.conversation_service import (
+            get_conversation_service, reset_conversation_service,
+        )
+        reset_conversation_service()
+        a = get_conversation_service()
+        b = get_conversation_service()
+        assert a is b
+        reset_conversation_service()

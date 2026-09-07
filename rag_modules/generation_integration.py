@@ -12,6 +12,7 @@ import requests
 
 from openai import OpenAI
 from langchain_core.documents import Document
+from config import DEFAULT_CONFIG
 from .context_manager import ContextManager
 
 
@@ -58,7 +59,7 @@ class GenerationIntegrationModule:
             self.model_name = model_name
             self.client = OpenAI(api_key='dummy',
                                 base_url=base_url,
-                                timeout=30.0)
+                                timeout=float(DEFAULT_CONFIG.llm_timeout_chat))
             logger.info(f"使用vLLM OpenAI兼容API: {base_url}, 模型: {model_name}")
 
         logger.info(f"生成模块初始化完成，LLM提供者: {llm_provider}")
@@ -194,7 +195,7 @@ class GenerationIntegrationModule:
                         "num_predict": calculated_max_tokens
                     }
                 }
-                response = requests.post(url, json=payload, timeout=60)
+                response = requests.post(url, json=payload, timeout=DEFAULT_CONFIG.llm_timeout_chat)
                 response.raise_for_status()
                 result = response.json()
                 return result["message"]["content"].strip()
@@ -265,7 +266,7 @@ class GenerationIntegrationModule:
                     "stream": False,
                     "options": {"temperature": 0.0, "num_predict": 256}
                 }
-                response = requests.post(url, json=payload, timeout=15)
+                response = requests.post(url, json=payload, timeout=DEFAULT_CONFIG.llm_timeout_quick)
                 response.raise_for_status()
                 rewritten = response.json()["message"]["content"].strip()
             else:
@@ -399,13 +400,13 @@ class GenerationIntegrationModule:
                             "num_predict": calculated_max_tokens
                         }
                     }
-                    response = requests.post(url, json=payload, stream=True, timeout=60)
+                    response = requests.post(url, json=payload, stream=True, timeout=DEFAULT_CONFIG.llm_timeout_chat)
                     response.raise_for_status()
 
                     if attempt == 0:
-                        print("开始流式生成回答...\n")
+                        logger.info("开始流式生成回答...\n")
                     else:
-                        print(f"第{attempt + 1}次尝试流式生成...\n")
+                        logger.info(f"第{attempt + 1}次尝试流式生成...\n")
 
                     full_response = ""
                     for line in response.iter_lines():
@@ -435,9 +436,9 @@ class GenerationIntegrationModule:
                     )
 
                     if attempt == 0:
-                        print("开始流式生成回答...\n")
+                        logger.info("开始流式生成回答...\n")
                     else:
-                        print(f"第{attempt + 1}次尝试流式生成...\n")
+                        logger.info(f"第{attempt + 1}次尝试流式生成...\n")
 
                     full_response = ""
                     for chunk in response:
@@ -452,12 +453,12 @@ class GenerationIntegrationModule:
 
                 if attempt < max_retries - 1:
                     wait_time = (attempt + 1) * 2
-                    print(f"⚠️ 连接中断，{wait_time}秒后重试...")
+                    logger.info(f"⚠️ 连接中断，{wait_time}秒后重试...")
                     time.sleep(wait_time)
                     continue
                 else:
                     logger.error(f"流式生成完全失败，尝试非流式后备方案")
-                    print("⚠️ 流式生成失败，切换到标准模式...")
+                    logger.info("⚠️ 流式生成失败，切换到标准模式...")
 
                     try:
                         fallback_response = self.generate_adaptive_answer(question, documents)

@@ -148,9 +148,11 @@ def _perform_external_ocr(
 
         output_md_path.parent.mkdir(parents=True, exist_ok=True)
         output_md_path.write_text(text, encoding="utf-8")
+        # 注意：f-string 表达式内不能含反斜杠（Python<3.12 语法错误），先计算
+        output_path_str = str(output_md_path).replace('\\', '/')
         return {
             "success": True,
-            "message": f"OCR识别完成，输出: {str(output_md_path).replace('\\', '/')}",
+            "message": f"OCR识别完成，输出: {output_path_str}",
             "ocr_text_length": len(text),
         }
     except Exception as e:
@@ -160,7 +162,8 @@ def _perform_external_ocr(
 def _import_generator_module(project_root: Path):
     csv_dir = project_root / "csv_generate"
     if not csv_dir.exists():
-        raise FileNotFoundError(f"未找到目录: {str(csv_dir).replace('\\', '/')}")
+        csv_dir_str = str(csv_dir).replace('\\', '/')
+        raise FileNotFoundError(f"未找到目录: {csv_dir_str}")
 
     csv_dir_str = str(csv_dir)
     if csv_dir_str not in sys.path:
@@ -234,16 +237,18 @@ def _run_extraction_task(task_id: str):
         actual_input = temp_md
 
     if not config_path.exists():
+        config_path_str = str(config_path).replace('\\', '/')
         with TASKS_LOCK:
             task["status"] = "failed"
             task["finished_at"] = int(time.time())
-            task["error"] = f"配置文件不存在: {str(config_path).replace('\\', '/')}"
+            task["error"] = f"配置文件不存在: {config_path_str}"
         return
 
     output_dir.mkdir(parents=True, exist_ok=True)
+    actual_input_str = str(actual_input).replace('\\', '/')
     _append_task_log(
         task,
-        f"[RUN] 直接调用 kg_generator_v2 模块，input={str(actual_input).replace('\\', '/')}",
+        f"[RUN] 直接调用 kg_generator_v2 模块，input={actual_input_str}",
     )
 
     log_writer = _TaskLogWriter(task)

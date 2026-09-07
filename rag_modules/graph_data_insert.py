@@ -168,7 +168,7 @@ class GraphDataInsert:
                             "num_predict": 2048
                         }
                     }
-                    response = requests.post(url, json=payload, timeout=90)
+                    response = requests.post(url, json=payload, timeout=self.config.llm_timeout_long)
                     response.raise_for_status()
                     result = response.json()
                     content = result["message"]["content"].strip()
@@ -773,7 +773,7 @@ class GraphDataInsert:
                     "stream": False,
                     "options": {"temperature": 0.0, "num_predict": 2048},
                 }
-                resp = requests.post(url, json=payload, timeout=180)
+                resp = requests.post(url, json=payload, timeout=self.config.llm_timeout_long)
                 resp.raise_for_status()
                 content = resp.json().get("message", {}).get("content", "").strip()
                 data = self._extract_json_from_text(content)
@@ -848,7 +848,7 @@ class GraphDataInsert:
                     "stream": False,
                     "options": {"temperature": 0.0, "num_predict": 2048}
                 }
-                resp = requests.post(f"{self.ollama_base_url}/api/chat", json=payload, timeout=180)
+                resp = requests.post(f"{self.ollama_base_url}/api/chat", json=payload, timeout=self.config.llm_timeout_long)
                 resp.raise_for_status()
                 content = (resp.json().get("message", {}) or {}).get("content", "").strip()
 
@@ -1011,7 +1011,7 @@ class GraphDataInsert:
                             "num_predict": 1024
                         }
                     }
-                    response = requests.post(url, json=payload, timeout=60)
+                    response = requests.post(url, json=payload, timeout=self.config.llm_timeout_long)
                     response.raise_for_status()
                     result = response.json()
                     content = result["message"]["content"].strip()

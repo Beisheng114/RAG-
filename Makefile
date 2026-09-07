@@ -46,6 +46,12 @@ eval: ## 运行检索评测（recall@k / MRR），报告存 evaluation/results/
 test: ## 本地跑 pytest 冒烟测试（不走容器）
 	python3 -m pytest tests/ -v
 
+lock: ## 生成 requirements.lock（部署用精确版本；在装好依赖的环境执行）
+	python3 -m pip freeze > requirements.lock
+	@echo "已生成 requirements.lock（部署: pip install -r requirements.lock）"
+
+.PHONY: lock
+
 # ---------- 清理 ----------
 
 clean-soft: ## 停止并删除容器与网络（保留全部数据卷）

@@ -330,7 +330,7 @@ class GraphRAGRetrieval:
                         "num_predict": 512
                     }
                 }
-                response = requests.post(url, json=payload, timeout=30)
+                response = requests.post(url, json=payload, timeout=self.config.llm_timeout_chat)
                 response.raise_for_status()
                 result_json = response.json()
                 content = result_json["message"]["content"].strip()

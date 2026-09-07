@@ -1062,7 +1062,9 @@ class HybridRetrievalModule:
                 node_id = doc.metadata.get("neo4j_node_id")
                 if node_id:
                     return str(node_id)
-                return str(hash(doc.page_content[:200]))
+                # 无 node_id 时用内容指纹：hash() 每进程随机化，多 worker 部署
+                # 下同一文档会得到不同 ID 导致 RRF 融合失效，必须用 md5
+                return hashlib.md5(str(doc.page_content[:200]).encode("utf-8")).hexdigest()
 
             # RRF 融合（纯函数实现在 core/rrf.py，便于单元测试）
             ranked = rrf_fuse(

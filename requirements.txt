@@ -1,25 +1,29 @@
 # Web 框架
-fastapi>=0.110
-uvicorn>=0.29
-pydantic>=2.6
+fastapi>=0.110,<1.0
+uvicorn>=0.29,<1.0
+pydantic>=2.6,<3.0
 
 # 数据库
-neo4j>=5.19
-qdrant-client>=1.9
+neo4j>=5.19,<6.0
+qdrant-client>=1.9,<2.0
 
-# LangChain
-langchain-core>=0.2
-langchain-community>=0.2
-langchain-huggingface>=0.1
+# LangChain（0.1→0.2→0.3 之间均有破坏性变更，上限防止意外升级；
+# 部署时建议用 make lock 生成 requirements.lock 精确锁定）
+langchain-core>=0.2,<0.4
+langchain-community>=0.2,<0.4
+langchain-huggingface>=0.1,<0.2
 
 # 嵌入/重排模型
-sentence-transformers>=2.7
-transformers>=4.40
+sentence-transformers>=2.7,<4.0
+transformers>=4.40,<5.0
 
 # 工具库
-python-dotenv>=1.0
-numpy>=1.26
-pandas>=2.2
-openai>=1.30
-requests>=2.31
-PyYAML>=6.0
+python-dotenv>=1.0,<2.0
+numpy>=1.26,<3.0
+pandas>=2.2,<3.0
+openai>=1.30,<3.0
+requests>=2.31,<3.0
+PyYAML>=6.0,<7.0
+
+# 测试（可选，部署可不装）
+pytest>=8.0

@@ -2,7 +2,7 @@
 FastAPI 应用入口（装配层）
 
 业务逻辑已下沉：
-- services/conversation_service.py  对话 CRUD（SQLite 持久化 + 内存缓存）
+- services/conversation_service.py  对话 CRUD（SQLite 持久化 + 内存缓存，惰性单例）
 - services/case_state_service.py    维修过程记录（case state）全部逻辑
 - services/export_service.py        对话导出
 - routers/                          admin / graph / kg_import / pages 路由
@@ -14,12 +14,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse, JSONResponse
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
+from contextlib import asynccontextmanager
+import logging
 import uuid
 import json
 import os
 from urllib.parse import quote
 from pathlib import Path
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 from ragmain import AdvancedGraphRAGSystem
 from core.system_context import set_rag_system
 from core.security import get_api_key, get_cors_origins, check_api_access
@@ -27,7 +31,7 @@ from routers.admin_routes import router as admin_router
 from routers.kg_import_routes import router as kg_import_router
 from routers.graph_routes import router as graph_router
 from routers.page_routes import router as page_router
-from services.conversation_service import conversation_service
+from services.conversation_service import get_conversation_service
 from services.case_state_service import (
     default_case_state,
     ensure_conversation_case_state,
@@ -46,22 +50,31 @@ from services import export_service
 # 全局RAG系统实例
 rag_system = None
 
-app = FastAPI(
-    title="船舶故障维修RAG系统 API",
-    description="提供对话管理、问答和知识库管理功能",
-    version="1.1.0"
-)
-
-# 启动事件
-@app.on_event("startup")
-async def startup_event():
+# 应用生命周期（替代已弃用的 @app.on_event("startup")，FastAPI 0.109+ 推荐）
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     global rag_system
-    print("正在初始化RAG系统...")
+    logger.info("正在初始化RAG系统...")
     rag_system = AdvancedGraphRAGSystem()
     rag_system.initialize_system()
     rag_system.build_knowledge_base()
     set_rag_system(rag_system)
-    print("RAG系统初始化完成！")
+    logger.info("RAG系统初始化完成！")
+    yield
+    # 关闭时释放资源
+    try:
+        if rag_system is not None:
+            rag_system._cleanup()
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"RAG系统清理时出错（忽略）: {e}")
+
+
+app = FastAPI(
+    title="船舶故障维修RAG系统 API",
+    description="提供对话管理、问答和知识库管理功能",
+    version="1.1.0",
+    lifespan=lifespan,
+)
 
 # 配置CORS（白名单可通过环境变量 RAG_CORS_ORIGINS 覆盖，逗号分隔；
 # 禁止与 allow_credentials=True 组合使用 "*"，详见 core/security.py）
@@ -194,7 +207,7 @@ class AdminOpResponse(BaseModel):
 @app.post("/api/conversations", response_model=Conversation)
 def create_conversation(request: CreateConversationRequest):
     """创建新对话"""
-    conv = conversation_service.create(request.title, case_state=default_case_state())
+    conv = get_conversation_service().create(request.title, case_state=default_case_state())
     return Conversation(**conv)
 
 
@@ -202,23 +215,23 @@ def create_conversation(request: CreateConversationRequest):
 def list_conversations():
     """获取所有对话列表"""
     return ConversationList(
-        conversations=[Conversation(**conv) for conv in conversation_service.list_all()]
+        conversations=[Conversation(**conv) for conv in get_conversation_service().list_all()]
     )
 
 
 @app.get("/api/conversations/{conversation_id}", response_model=Conversation)
 def get_conversation(conversation_id: str):
     """获取单个对话详情"""
-    if not conversation_service.exists(conversation_id):
+    if not get_conversation_service().exists(conversation_id):
         raise HTTPException(status_code=404, detail="对话不存在")
     ensure_conversation_case_state(conversation_id)
-    return Conversation(**conversation_service.get(conversation_id))
+    return Conversation(**get_conversation_service().get(conversation_id))
 
 
 @app.delete("/api/conversations/{conversation_id}")
 def delete_conversation(conversation_id: str):
     """删除对话"""
-    if not conversation_service.delete(conversation_id):
+    if not get_conversation_service().delete(conversation_id):
         raise HTTPException(status_code=404, detail="对话不存在")
     return {"success": True}
 
@@ -230,15 +243,15 @@ def query(request: QueryRequest):
     """发送查询并获取回答"""
     if not request.conversation_id:
         title = generate_conversation_title(request.message)
-        conv = conversation_service.create(title, case_state=default_case_state())
+        conv = get_conversation_service().create(title, case_state=default_case_state())
         conversation_id = conv["id"]
     else:
         conversation_id = request.conversation_id
-        if not conversation_service.exists(conversation_id):
+        if not get_conversation_service().exists(conversation_id):
             raise HTTPException(status_code=404, detail="对话不存在")
 
     ensure_conversation_case_state(conversation_id)
-    conv = conversation_service.get(conversation_id)
+    conv = get_conversation_service().get(conversation_id)
 
     # 添加用户消息
     user_message = Message(
@@ -272,7 +285,7 @@ def query(request: QueryRequest):
     )
     conv["messages"].append(assistant_message.model_dump())
     conv["updated_at"] = datetime.now().isoformat()
-    conversation_service.save(conversation_id)
+    get_conversation_service().save(conversation_id)
 
     # 自动生成“待确认草案”：仅在非拒答场景执行
     try:
@@ -294,15 +307,15 @@ async def query_stream(request: QueryRequest):
     """发送查询并获取流式回答"""
     if not request.conversation_id:
         title = generate_conversation_title(request.message)
-        conv = conversation_service.create(title, case_state=default_case_state())
+        conv = get_conversation_service().create(title, case_state=default_case_state())
         conversation_id = conv["id"]
     else:
         conversation_id = request.conversation_id
-        if not conversation_service.exists(conversation_id):
+        if not get_conversation_service().exists(conversation_id):
             raise HTTPException(status_code=404, detail="对话不存在")
 
     ensure_conversation_case_state(conversation_id)
-    conv = conversation_service.get(conversation_id)
+    conv = get_conversation_service().get(conversation_id)
 
     # 添加用户消息
     user_message = Message(
@@ -364,7 +377,7 @@ async def query_stream(request: QueryRequest):
         )
         conv["messages"].append(assistant_message.model_dump())
         conv["updated_at"] = datetime.now().isoformat()
-        conversation_service.save(conversation_id)
+        get_conversation_service().save(conversation_id)
 
         # 自动生成“待确认草案”：仅在非拒答场景执行
         try:
@@ -409,7 +422,7 @@ def get_case_state(conversation_id: str):
     return CaseStateResponse(
         success=True,
         conversation_id=conversation_id,
-        case_state=conversation_service.get(conversation_id)["case_state"],
+        case_state=get_conversation_service().get(conversation_id)["case_state"],
     )
 
 
@@ -419,7 +432,7 @@ def update_case_state(conversation_id: str, request: CaseStateUpdateRequest):
     if not isinstance(request.case_state, dict):
         raise HTTPException(status_code=400, detail="case_state 必须是对象")
 
-    conv = conversation_service.get(conversation_id)
+    conv = get_conversation_service().get(conversation_id)
     base = default_case_state()
     # 只允许更新白名单字段，避免前端误写导致结构污染
     allowed_keys = set(base.keys())
@@ -428,7 +441,7 @@ def update_case_state(conversation_id: str, request: CaseStateUpdateRequest):
     merged = {**conv["case_state"], **incoming}
     conv["case_state"] = merged
     conv["updated_at"] = datetime.now().isoformat()
-    conversation_service.save(conversation_id)
+    get_conversation_service().save(conversation_id)
     return CaseStateResponse(success=True, conversation_id=conversation_id, case_state=merged)
 
 
@@ -452,7 +465,7 @@ def generate_case_keywords(conversation_id: str):
     return CaseStateResponse(
         success=True,
         conversation_id=conversation_id,
-        case_state=conversation_service.get(conversation_id)["case_state"],
+        case_state=get_conversation_service().get(conversation_id)["case_state"],
     )
 
 
@@ -468,7 +481,7 @@ def get_case_keywords(conversation_id: str):
     return CaseStateResponse(
         success=True,
         conversation_id=conversation_id,
-        case_state=conversation_service.get(conversation_id)["case_state"],
+        case_state=get_conversation_service().get(conversation_id)["case_state"],
     )
 
 
@@ -480,7 +493,7 @@ def generate_case_draft(conversation_id: str):
     return CaseStateResponse(
         success=True,
         conversation_id=conversation_id,
-        case_state=conversation_service.get(conversation_id)["case_state"],
+        case_state=get_conversation_service().get(conversation_id)["case_state"],
     )
 
 
@@ -504,25 +517,25 @@ def apply_case_draft(conversation_id: str, request: ApplyDraftRequest):
 @app.get("/api/export/{conversation_id}", response_model=ExportResponse)
 def export_conversation(conversation_id: str):
     """导出对话"""
-    if not conversation_service.exists(conversation_id):
+    if not get_conversation_service().exists(conversation_id):
         raise HTTPException(status_code=404, detail="对话不存在")
-    url = export_service.export_json(conversation_service.get(conversation_id))
+    url = export_service.export_json(get_conversation_service().get(conversation_id))
     return ExportResponse(success=True, url=url)
 
 
 @app.get("/api/export-md/{conversation_id}", response_model=ExportResponse)
 def export_conversation_to_markdown(conversation_id: str):
     """导出对话为 Markdown 文档 (.md)"""
-    if not conversation_service.exists(conversation_id):
+    if not get_conversation_service().exists(conversation_id):
         raise HTTPException(status_code=404, detail="对话不存在")
-    url = export_service.export_markdown(conversation_service.get(conversation_id))
+    url = export_service.export_markdown(get_conversation_service().get(conversation_id))
     return ExportResponse(success=True, url=url)
 
 
 @app.get("/api/system/stats")
 def get_system_stats():
     """获取系统统计信息"""
-    return conversation_service.stats()
+    return get_conversation_service().stats()
 
 
 @app.post("/api/import", response_model=ImportResponse)
@@ -558,7 +571,7 @@ async def import_conversation(file: UploadFile = File(...), title: str = Form(..
             "created_at": now,
             "updated_at": now
         }
-        conversation_service.save_conv(conversation)
+        get_conversation_service().save_conv(conversation)
 
         return ImportResponse(success=True, conversation_id=conversation_id)
     except Exception as e:

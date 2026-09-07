@@ -78,6 +78,12 @@ class GraphRAGConfig:
     temperature: float = 0.3
     max_tokens: int = 4096  # 生成回答的最大 token 数（需不超过所用LLM的上下文窗口）
 
+    # LLM 调用超时（秒），统一管理原先散落各模块的 15/30/60/90/180：
+    #   quick = 查询改写等轻调用；chat = 生成/路由分析；long = 图谱抽取/复盘等长输出
+    llm_timeout_quick: int = 15
+    llm_timeout_chat: int = 60
+    llm_timeout_long: int = 180
+
     # 图数据处理配置
     chunk_size: int = 500
     chunk_overlap: int = 50
@@ -88,6 +94,7 @@ class GraphRAGConfig:
 
     # 检索策略配置
     use_intelligent_router: bool = True  # 是否使用智能查询路由
+    router_fast_path: bool = True  # 路由快速路径：规则判定简单查询时跳过LLM分析往返
     hybrid_search_weight: float = 0.5  # 混合检索权重
 
     def __post_init__(self):

@@ -71,10 +71,22 @@ class IntelligentQueryRouter:
     def analyze_query(self, query: str) -> QueryAnalysis:
         """
         深度分析查询特征，决定最佳检索策略
+
+        快速路径：规则判定为明确简单查询时直接采纳规则结果，跳过 LLM 往返
+        （本地小模型上单次路由分析约占问答时延 20%+，简单查询无需精判）。
         """
         logger.info(f"分析查询特征: {query}")
         if self.config.use_intelligent_router != True:
             return self._rule_based_analysis(query)
+
+        # 规则快速路径：无关系信号词、复杂度极低（至多命中1个复杂度词）
+        # 的单一实体查找（如"发电机异响""轴承型号"）直接走规则结论
+        if getattr(self.config, "router_fast_path", True):
+            rule = self._rule_based_analysis(query)
+            if rule.query_complexity < 0.15 and rule.relationship_intensity == 0:
+                logger.info(f"路由快速路径（规则判定简单查询）: {rule.recommended_strategy.value}")
+                return rule
+
         # 使用LLM进行智能分析
         analysis_prompt = f"""
         作为RAG系统的查询分析专家，请深度分析以下查询的特征：
@@ -125,7 +137,7 @@ class IntelligentQueryRouter:
                         "num_predict": 512
                     }
                 }
-                response = requests.post(url, json=payload, timeout=30)
+                response = requests.post(url, json=payload, timeout=self.config.llm_timeout_chat)
                 response.raise_for_status()
                 result_json = response.json()
                 content = result_json["message"]["content"].strip()

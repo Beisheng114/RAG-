@@ -108,5 +108,31 @@ class ConversationService:
         self.store.close()
 
 
-# 模块级单例（app.py 与各 service 共享）
-conversation_service = ConversationService()
+# ---------- 惰性单例 ----------
+# 不在模块级直接实例化：import 本模块不再产生创建 SQLite/迁移旧 JSON 的副作用，
+# 首次真正需要读写对话时才初始化（测试也因此无需 monkeypatch 模块属性）。
+
+_conversation_service: Optional[ConversationService] = None
+_singleton_lock = threading.Lock()
+
+
+def get_conversation_service() -> ConversationService:
+    """获取全局对话服务单例（首次调用时初始化，线程安全）"""
+    global _conversation_service
+    if _conversation_service is None:
+        with _singleton_lock:
+            if _conversation_service is None:
+                _conversation_service = ConversationService()
+    return _conversation_service
+
+
+def reset_conversation_service() -> None:
+    """重置并关闭单例（主要用于测试）"""
+    global _conversation_service
+    with _singleton_lock:
+        if _conversation_service is not None:
+            try:
+                _conversation_service.close()
+            except Exception:  # noqa: BLE001
+                pass
+        _conversation_service = None

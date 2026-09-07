@@ -19,12 +19,11 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException
 
+from config import DEFAULT_CONFIG
 from core.system_context import get_rag_system
-from services.conversation_service import conversation_service
+from services.conversation_service import get_conversation_service
 
 logger = logging.getLogger(__name__)
-
-conversations = conversation_service  # 别名，便于迁移代码阅读
 
 
 def _now_iso() -> str:
@@ -32,14 +31,14 @@ def _now_iso() -> str:
 
 
 def _conv(conversation_id: str) -> Dict[str, Any]:
-    conv = conversation_service.get(conversation_id)
+    conv = get_conversation_service().get(conversation_id)
     if conv is None:
         raise HTTPException(status_code=404, detail="对话不存在")
     return conv
 
 
 def _save(conversation_id: str) -> None:
-    conversation_service.save(conversation_id)
+    get_conversation_service().save(conversation_id)
 
 
 def default_case_state() -> Dict[str, Any]:
@@ -379,7 +378,7 @@ def _generate_freeform_text(prompt: str) -> str:
                     "num_predict": calculated_max_tokens,
                 },
             }
-            resp = requests.post(url, json=payload, timeout=90)
+            resp = requests.post(url, json=payload, timeout=DEFAULT_CONFIG.llm_timeout_long)
             resp.raise_for_status()
             data = resp.json()
             return ((data.get("message") or {}).get("content") or "").strip()
