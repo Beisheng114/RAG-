@@ -632,6 +632,15 @@
             color: #1E90FF;
         }
 
+        /* 导航分组标题（系统管理等） */
+        .nav-section-title {
+            font-size: 0.7rem;
+            color: #8fb3cf;
+            letter-spacing: 2px;
+            padding: 0.9rem 1rem 0.15rem;
+            user-select: none;
+        }
+
         /* 新建对话按钮区域 */
         .new-conv-wrapper {
             padding: 0.75rem 0.75rem;

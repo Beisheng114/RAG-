@@ -131,8 +131,9 @@ client = TestClient(app, raise_server_exceptions=False)
 client.raise_server_exceptions = False
 
 # --- 静态页与根路由 ---
-check("GET / 重定向", lambda: (lambda r: (_ for _ in ()).throw(AssertionError(r.status_code)) if r.status_code not in (200, 307) else f"{r.status_code}")(client.get("/", follow_redirects=False)))
-check("GET /static/home.html", lambda: (_ for _ in ()).throw(AssertionError(client.get("/static/home.html").status_code)) if client.get("/static/home.html").status_code != 200 else "200")
+check("GET / 返回 SPA 主页面", lambda: (lambda r: (_ for _ in ()).throw(AssertionError(r.status_code)) if r.status_code not in (200, 307) else f"{r.status_code}")(client.get("/", follow_redirects=False)))
+check("GET /static/index.html", lambda: (_ for _ in ()).throw(AssertionError(client.get("/static/index.html").status_code)) if client.get("/static/index.html").status_code != 200 else "200")
+check("GET /static/home.html 旧链接重定向", lambda: (lambda r: (_ for _ in ()).throw(AssertionError(r.status_code)) if r.status_code not in (200, 307) else f"{r.status_code}")(client.get("/static/home.html", follow_redirects=False)))
 
 # --- 对话 CRUD 全链路 ---
 conv_id = None

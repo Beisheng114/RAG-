@@ -334,6 +334,20 @@
                 <i class="fa fa-server"></i>
                 <span>系统运维</span>
             </button>
+
+            <div class="nav-section-title">系统管理</div>
+            <button id="nav-extract" class="nav-item" title="知识图谱抽取任务">
+                <i class="fa fa-magic"></i>
+                <span>图谱提取</span>
+            </button>
+            <button id="nav-kgadmin" class="nav-item" title="知识库备份与导入管理">
+                <i class="fa fa-database"></i>
+                <span>知识库管理</span>
+            </button>
+            <button id="nav-config" class="nav-item" title="查看系统配置（脱敏）">
+                <i class="fa fa-cog"></i>
+                <span>系统配置</span>
+            </button>
         </div>
 
         <!-- 新建对话按钮 -->
@@ -1288,9 +1302,21 @@
 
 <!--启动页面 script-->
     <script>
+    // 统一 hash 导航入口（全局可访问）：推送历史 + 切换视图
+    window.navigateToPage = function(targetPage) {
+        history.pushState({ page: targetPage }, getPageTitle(targetPage), getPageUrl(targetPage));
+        switchToPage(targetPage);
+    };
+
     // 页面切换函数（全局可访问）
     window.switchToPage = function(targetPage) {
-        console.log('switchToPage 被调用，目标页面:', targetPage);
+        // 同步侧边栏选中状态（侧边栏在 app-layout 内，切到独立视图时整体隐藏）
+        document.querySelectorAll('.nav-item').forEach(function(item) { item.classList.remove('active'); });
+        if (targetPage === 'main-system-page') {
+            const navChat = document.getElementById('nav-chat');
+            if (navChat) navChat.classList.add('active');
+        }
+
         
         // 隐藏所有视图
         const launchPage = document.getElementById('launch-page');
@@ -1366,7 +1392,16 @@
     
     // 启动页面卡片点击切换逻辑
     document.addEventListener('DOMContentLoaded', function() {
-        console.log('启动页面初始化...');
+        // 兼容旧链接 query 参数（如 index.html?page=chat）：映射到 SPA hash 路由
+        var legacyQuery = null;
+        try { legacyQuery = new URLSearchParams(window.location.search).get('page'); } catch (e) {}
+        var legacyMap = { 'chat': 'main-system-page', 'visualize': 'main-system-page' };
+        if (legacyQuery && legacyMap[legacyQuery]) {
+            var legacyTarget = legacyMap[legacyQuery];
+            history.replaceState({ page: legacyTarget }, getPageTitle(legacyTarget), getPageUrl(legacyTarget));
+            switchToPage(legacyTarget);
+            return;
+        }
         
         // 页面首次加载时，先初始化历史记录状态（关键！）
         // 这样可以确保浏览器返回按钮有正确的初始状态可以返回
@@ -1383,16 +1418,8 @@
             card.addEventListener('click', function(e) {
                 e.preventDefault();
                 const targetPage = this.dataset.page;
-                console.log('点击卡片，目标页面:', targetPage);
-                
-                // 推送到浏览器历史记录
-                const state = { page: targetPage };
-                const title = getPageTitle(targetPage);
-                const url = getPageUrl(targetPage);
-                history.pushState(state, title, url);
-                
-                // 切换视图
-                switchToPage(targetPage);
+                // 推送历史并切换视图（统一导航入口）
+                navigateToPage(targetPage);
             });
         });
         
@@ -2800,8 +2827,6 @@
         
         // 显示聊天内容
         function showChatContent() {
-            const homeView = document.getElementById('home-view');
-            if (homeView) homeView.classList.add('hidden');
             document.getElementById('chat-view').classList.remove('hidden');
             document.getElementById('import-content').classList.add('hidden');
             document.getElementById('material-content').classList.add('hidden');
@@ -2815,23 +2840,7 @@
             setCasePanelVisible(!!currentConversationId);
             renderCaseState();
         }
-        
-        // 显示主页面
-        function showHomeView() {
-            const homeView = document.getElementById('home-view');
-            if (homeView) homeView.classList.remove('hidden');
-            document.getElementById('chat-view').classList.add('hidden');
-            document.getElementById('import-content').classList.add('hidden');
-            document.getElementById('material-content').classList.add('hidden');
-            document.getElementById('visualize-content').classList.add('hidden');
-            document.getElementById('operationsData-content').classList.add('hidden');
-            document.getElementById('content-title').textContent = '';
-            document.getElementById('export-menu-container').classList.add('hidden');
-            document.getElementById('delete-conversation').classList.add('hidden');
-            document.getElementById('file-manager-content').classList.add('hidden');
-            setCasePanelVisible(false);
-        }
-        
+
         // 视图切换函数
         function switchView(viewName) {
             // 更新左侧导航选中状态
@@ -2857,27 +2866,6 @@
                 document.getElementById('delete-conversation').classList.remove('hidden');
                 setCasePanelVisible(!!currentConversationId);
                 renderCaseState();
-            } else if (viewName === 'extract') {
-                document.getElementById('extract-view').classList.remove('hidden');
-                document.getElementById('nav-extract').classList.add('active');
-                document.getElementById('content-title').textContent = '知识图谱提取';
-                document.getElementById('export-menu-container').classList.add('hidden');
-                document.getElementById('delete-conversation').classList.add('hidden');
-                setCasePanelVisible(false);
-            } else if (viewName === 'kgadmin') {
-                document.getElementById('kgadmin-view').classList.remove('hidden');
-                document.getElementById('nav-kgadmin').classList.add('active');
-                document.getElementById('content-title').textContent = '知识库管理';
-                document.getElementById('export-menu-container').classList.add('hidden');
-                document.getElementById('delete-conversation').classList.add('hidden');
-                setCasePanelVisible(false);
-            } else if (viewName === 'config') {
-                document.getElementById('config-view').classList.remove('hidden');
-                document.getElementById('nav-config').classList.add('active');
-                document.getElementById('content-title').textContent = '系统配置';
-                document.getElementById('export-menu-container').classList.add('hidden');
-                document.getElementById('delete-conversation').classList.add('hidden');
-                setCasePanelVisible(false);
             }
         }
         
@@ -4561,6 +4549,19 @@ function displayNodeTypeCounts(counts) {
             document.getElementById('nav-operationsData').addEventListener('click', function() {
                 showOperationsDataContent();
                 updateNavButtons('operationsData');
+            });
+
+            // 系统管理入口：切换到独立全屏视图（与启动卡片行为一致，走 hash 路由）
+            document.getElementById('nav-extract').addEventListener('click', function() {
+                navigateToPage('extract-page');
+            });
+
+            document.getElementById('nav-kgadmin').addEventListener('click', function() {
+                navigateToPage('kb-manager-page');
+            });
+
+            document.getElementById('nav-config').addEventListener('click', function() {
+                navigateToPage('config-page');
             });
             
             // 新对话按钮
