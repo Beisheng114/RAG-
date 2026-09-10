@@ -1,9 +1,9 @@
-# 知识图谱可视化优化 + 全站前端风格统一
+# 知识图谱可视化优化 + 页面合并重构 + 全站风格统一
 
-- 日期：2026-09-08
+- 日期：2026-09-08（2026-09-10 扩展页面合并与图标动效）
 - 分支：`optimize/kg-visualization`
 - 状态：已确认（待用户评审）
-- 范围：前端图谱渲染层重写 + 交互增强 + 后端小改（分页/邻居接口）+ 全站设计令牌统一
+- 范围：页面跳转逻辑梳理与合并 → 全站单 SPA 载体 → 图谱渲染层重写（ECharts）+ 交互增强 + 后端小改（分页/邻居接口）+ 设计令牌统一 + 图标动效规范
 
 ## 1. 背景与现状
 
@@ -25,6 +25,13 @@
 - 主页面：自定义 CSS（`static/css/index.css` 2734 行），底色 `#F0F8FF`、28px 大圆角、主色 blue-500
 - 其余 4 页（home/config/extract/kg_admin）：Tailwind utility，底色 slate-50/100、圆角 12–16px、主色 blue-600
 - 死资源：`static/index.css`（2550 行，无人引用）、`font-awesome-6.0.0.min.css`（无人引用）
+
+**跳转逻辑混乱（2026-09-10 梳理）**
+- 三重复制：extract / kg_admin / config 的 HTML+逻辑在「index.html 内嵌视图 + static/js/*.js」与「独立页面 + 各自内嵌 script」各存一份
+- 双分流入口：根路由 `GET /` → home.html（Tailwind 朴素卡片）与 index.html 启动页（波浪动效书签卡片）功能相同、观感不同
+- 失效跳转：独立页面「返回对话页面」链接 `index.html?page=chat`，index.html 不处理 `?page` query 参数，点入后停在启动页
+- 死代码路径：`switchView('extract'/'kgadmin'/'config')` 无侧边栏入口
+- 图标混乱：FA 4.7 图标与 emoji（⚡🔄）混用
 
 **技术栈事实**
 - `static/libs/echarts.min.js` 为 5.5.0，已在 index.html 加载，graph series / `emphasis.focus` / legend 交互 / `labelLayout.hideOverlap` 全部可用
@@ -52,6 +59,26 @@
 代码结构上用户明确**不拆分** index.html（图谱逻辑保持内联）。
 
 ## 4. 架构
+
+### 4.1 页面合并（SPA 单载体，方案一）
+
+**合并决策**（用户已确认）：
+- 全站收敛为 `index.html` 唯一 HTML 载体，hash 路由（`#launch-page` / `#main-system-page` / `#extract-page` / `#kb-manager-page` / `#config-page`）
+- 删除 4 个独立页面：`home.html`、`extract.html`、`kg_admin.html`、`config.html`
+- 内嵌视图（extract-view / kgadmin-view / config-view）+ `static/js/*.js` 为唯一实现（实现前 diff 确认独立页面无独有功能）
+- 根路由 `GET /`（`routers/page_routes.py:10`）由重定向 home.html 改为直接返回 index.html
+
+**导航重构**：
+- 侧边栏 nav-menu 补三个入口：图谱提取（fa-magic）/ 知识库管理（fa-database）/ 系统配置（fa-cog），点击走 `switchToPage`
+- 侧边栏底部增加「返回启动页」入口（fa-home）
+- 删除 `switchView` 中 extract/kgadmin/config 死路径，统一由 `switchToPage` 管理
+- `switchToPage` 增加 hash 同步与 `popstate`（现有逻辑保留）
+
+**兼容跳转**（page_routes.py）：
+- `?page=chat` query 参数 → 映射 `#main-system-page`（index.html 加载时处理）
+- 删除页面路径（`/static/home.html` 等）→ 后端重定向到 `index.html` 对应 hash
+
+### 4.2 图谱视图架构
 
 ```
 index.html（图谱视图）
@@ -134,32 +161,54 @@ index.html（图谱视图）
 }
 ```
 
-**各页面改动**
-1. 4 个小页面：引入 theme.css；底色统一浅蓝；卡片圆角对齐 16px；页头结构统一（标题 + 副标题 + 右上角返回按钮组）
-2. index.html：`css/index.css` 硬编码色替换为变量引用（改值不改结构）；图谱新组件直接用变量；ECharts categories 颜色由 JS 读 `--kg-*`
-3. 主页面卡片圆角 28px → 16px（`--radius-card`）
+**改动（页面合并后，全站即 index.html 一个载体）**
+1. index.html 全局引用 theme.css（`<head>` 引入）
+2. 内嵌视图（extract/kgadmin/config 视图、启动页）视觉对齐：底色统一浅蓝、卡片圆角 16px、页头结构统一（标题 + 副标题 + 右上角返回按钮）
+3. `css/index.css` 硬编码色替换为变量引用（改值不改结构）；图谱新组件直接用变量；ECharts categories 颜色由 JS 读 `--kg-*`
+4. 启动页卡片圆角 28px → 16px（`--radius-card`）
 
 **明确不做**：全站 Tailwind utility 化重写（主页面 2700+ 行 CSS 迁移风险远超收益）。
 
 **清理项**（实现阶段 grep 验证后执行）
+- 删除 4 个独立页面：`home.html`、`extract.html`、`kg_admin.html`、`config.html`（合并方案一）
 - 删除 `static/index.css`（死文件，确认无引用后）
-- 移除 index.html 对 `css/home.css`、`css/config.css`、`css/kg_admin.css`、`css/extract.css` 的引用（先确认无类名依赖）
+- 移除 index.html 对 `css/home.css`、`css/config.css`、`css/kg_admin.css`、`css/extract.css` 的引用（先确认内嵌视图无类名依赖；若有依赖则保留对应文件并令牌化）
 - 删除 `libs/font-awesome-6.0.0.min.css` 引用（无人使用）
 
-## 10. 视觉统一细节（图谱页）
+## 10. 图标与动效规范
+
+**图标**（基于现有离线 FA 4.7，不引入新依赖）：
+- 语义映射表：对话 fa-comments-o / 文件管理 fa-folder / 知识图谱 fa-sitemap / 导入对话 fa-upload / 资料导入 fa-file-text-o / 资料查询 fa-search / 系统运维 fa-server / 图谱提取 fa-magic / 知识库管理 fa-database / 系统配置 fa-cog / 返回启动页 fa-home
+- emoji 一律替换为 FA 图标（文件管理器 ⚡🔄 等）
+- 同一操作语义全站使用同一图标（刷新一律 fa-refresh、删除一律 fa-trash-o）
+
+**动效**（theme.css 统一定义，量级克制）：
+- transition 统一 0.2s ease；hover 提升统一 0.25s
+- 卡片 hover：上浮 2px + 阴影加深
+- 视图切换：内容区 fade-in 0.2s
+- 详情侧栏：translateX 滑入 0.25s
+- 加载态：统一 fa-spinner fa-spin
+- 保留启动页波浪 SVG 动效（统一到主色板）
+- `@media (prefers-reduced-motion: reduce)` 全局降级为无动画
+
+## 11. 视觉统一细节（图谱页）
 
 - 统一色板：`getNodeColor` 为唯一色源，饼图 `createNodeTypeChart` 按类型取同色
 - 类型名中文化：图例/详情/统计统一映射（Equipment→设备 等，复用现有 entity-type 映射）
 - 统计卡片：`updateGraphStats` 由原始 `key: value` 改为结构化卡片（当前节点数 / 关系数 / 类型数）
 
-## 11. 测试
+## 12. 测试
 
 **后端 pytest**（跟随 test_smoke.py 无外部依赖模式，mock driver）：
 - offset 透传进 Cypher 参数、负数 clamp
 - neighbors 接口参数构造、响应模型、去重行为
 - has_more 判定逻辑
+- 根路由返回 index.html、删除页面路径重定向
 
 **前端手动验收清单**：
+- [ ] 根路由 / 直接进入启动页（无 home.html）
+- [ ] 启动页 4 卡片 + 侧边栏 10 项 + 返回启动页均可达
+- [ ] 旧链接 `?page=chat` / `/static/kg_admin.html` 等兼容重定向
 - [ ] 浏览模式查询 / 关键词查询 / 系统过滤
 - [ ] 图例点击过滤类型
 - [ ] 单击节点 → 详情侧栏 → 点击关联项定位
@@ -167,13 +216,16 @@ index.html（图谱视图）
 - [ ] 加载更多 → 追加渲染 → 无更多时禁用
 - [ ] 工具栏四按钮（重布局/适配/边标签/导出 PNG）
 - [ ] >300 节点自动隐藏边标签、>500 关闭布局动画
-- [ ] 五个页面底色/圆角/主色视觉一致
+- [ ] 浏览器前进/后退（popstate）在各视图间正确切换
+- [ ] 全站底色/圆角/主色/图标/动效一致；emoji 清零
 - [ ] toast 替代 alert 生效
+- [ ] prefers-reduced-motion 降级生效
 
-## 12. 实施顺序（建议）
+## 13. 实施顺序（建议）
 
-1. theme.css + 风格统一 + 清理死资源（独立可交付）
-2. 后端：offset / neighbors / has_more + pytest
-3. 前端渲染层：ECharts 重写 renderGraph + 图例/高亮/tooltip
-4. 前端交互：详情侧栏 / 工具栏 / toast / 分页 / 展开邻居 / 导出
-5. 手动验收清单过一遍
+1. 页面合并与导航重构（删 4 页面、根路由、侧边栏补入口、兼容跳转）— 独立可交付
+2. theme.css + 风格统一 + 死资源清理 + 图标动效规范落地
+3. 后端：offset / neighbors / has_more + pytest
+4. 前端渲染层：ECharts 重写 renderGraph + 图例/高亮/tooltip
+5. 前端交互：详情侧栏 / 工具栏 / toast / 分页 / 展开邻居 / 导出
+6. 手动验收清单过一遍
