@@ -353,8 +353,8 @@
             </button>
         </div>
 
-        <!-- 对话列表 -->
-        <div id="conversation-list" class="conversation-list">
+        <!-- 对话列表（默认隐藏，点开「对话」导航时展开） -->
+        <div id="conversation-list" class="conversation-list hidden">
             <div class="empty-list">
                 <i class="fa fa-commenting-o"></i>
                 <p>暂无对话记录<br>点击「新建对话」开始</p>
@@ -395,6 +395,14 @@
             <div id="chat-view" class="flex-1 flex overflow-hidden">
                 <!-- 左侧：对话区域 -->
                 <div id="chat-main" class="flex-1 flex flex-col overflow-hidden">
+                    <!-- 对话选择器（下拉切换当前对话 + 状态徽章） -->
+                    <div id="conv-select-bar" class="conv-select-bar">
+                        <i class="fa fa-comment-o conv-select-icon"></i>
+                        <select id="conv-select" class="conv-select">
+                            <option value="">选择对话…</option>
+                        </select>
+                        <span id="conv-select-status" class="conv-status-badge hidden"></span>
+                    </div>
                     <!-- 对话消息 -->
                     <div id="chat-content" class="flex-1 overflow-y-auto p-4 space-y-4">
                         <!-- 消息将通过JavaScript动态添加 -->
@@ -1337,10 +1345,11 @@
     // 页面切换函数（全局可访问）
     window.switchToPage = function(targetPage) {
         // 同步侧边栏选中状态（侧边栏在 app-layout 内，切到独立视图时整体隐藏）
-        document.querySelectorAll('.nav-item').forEach(function(item) { item.classList.remove('active'); });
         if (targetPage === 'main-system-page') {
-            const navChat = document.getElementById('nav-chat');
-            if (navChat) navChat.classList.add('active');
+            // 返回主系统时恢复离开前的内容视图导航高亮，避免「导航=对话但右侧=其他视图」的不一致
+            updateNavButtons(currentContentView || 'chat');
+        } else {
+            document.querySelectorAll('.nav-item').forEach(function(item) { item.classList.remove('active'); });
         }
 
         
@@ -1625,6 +1634,13 @@
                         body: JSON.stringify({ case_state: currentCaseState }),
                         signal: caseStateSaveController.signal
                     });
+                    // 状态变化（如结束对话）时刷新侧边栏状态卡片与顶部徽章
+                    const st = currentCaseState && currentCaseState.status;
+                    if (st !== window._lastCaseStatus) {
+                        window._lastCaseStatus = st;
+                        syncConvSelect();
+                        loadConversations();
+                    }
                 } catch (e) {
                     if (e?.name !== 'AbortError') {
                         console.error('保存 case_state 失败:', e);
@@ -1861,7 +1877,15 @@
             `;
         }
         
-        // 加载对话列表
+        // 对话状态信息（小卡片配色：对话中=蓝 / 已完结=绿）
+        function convStatusOf(conversation) {
+            const status = (conversation && conversation.case_state && conversation.case_state.status) || 'in_progress';
+            return status === 'ended'
+                ? { cls: 'ended', label: '已完结' }
+                : { cls: 'in-progress', label: '对话中' };
+        }
+
+        // 加载对话列表（侧边栏状态卡片 + 顶部下拉选择器同步渲染）
         async function loadConversations() {
             try {
                 const response = await fetch(`${API_BASE_URL}/conversations`);
@@ -1869,54 +1893,89 @@
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 const data = await response.json();
-                
+
                 const conversationList = document.getElementById('conversation-list');
                 conversationList.innerHTML = '';
-                
+
                 if (!data.conversations || data.conversations.length === 0) {
+                    conversationsCache = [];
                     conversationList.innerHTML = `
-                        <div class="text-center text-gray-400 p-4">
-                            <i class="fa fa-comment-o text-2xl mb-2"></i>
-                            <p>暂无对话</p>
-                            <p class="text-xs">点击"新对话"开始</p>
+                        <div class="empty-list">
+                            <i class="fa fa-commenting-o"></i>
+                            <p>暂无对话记录<br>点击「新建对话」开始</p>
                         </div>
                     `;
+                    syncConvSelect();
                     return;
                 }
-                
+
                 // 按更新时间排序，最新的在前面
                 data.conversations.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
-                
+                conversationsCache = data.conversations;
+
                 data.conversations.forEach(conversation => {
+                    const st = convStatusOf(conversation);
                     const conversationItem = document.createElement('div');
-                    conversationItem.className = `p-3 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors ${currentConversationId === conversation.id ? 'bg-blue-50 border-l-4 border-primary' : ''}`;
+                    conversationItem.className = 'conv-item' + (currentConversationId === conversation.id ? ' conv-item-active' : '');
                     conversationItem.dataset.id = conversation.id;
-                    
+
                     const time = new Date(conversation.updated_at).toLocaleString('zh-CN', {
                         month: 'short',
                         day: 'numeric',
                         hour: '2-digit',
                         minute: '2-digit'
                     });
-                    
+
+                    const lastMsg = conversation.messages.length > 0
+                        ? conversation.messages[conversation.messages.length - 1].content
+                        : '无消息';
+
                     conversationItem.innerHTML = `
-                        <div class="flex justify-between items-center mb-1">
-                            <h3 class="font-medium text-sm truncate flex-1 min-w-0">${conversation.title}</h3>
-                            <span class="text-xs text-gray-500 ml-2 whitespace-nowrap">${time}</span>
+                        <div class="conv-info">
+                            <div class="conv-title-line">
+                                <h3 class="conv-title">${conversation.title}</h3>
+                                <span class="conv-status-badge ${st.cls}"><span class="conv-status-dot"></span>${st.label}</span>
+                            </div>
+                            <p class="conv-preview">${lastMsg}</p>
+                            <p class="conv-meta"><i class="fa fa-clock-o"></i> ${time}</p>
                         </div>
-                        <p class="text-xs text-gray-500 truncate">
-                            ${conversation.messages.length > 0 ? conversation.messages[conversation.messages.length - 1].content : '无消息'}
-                        </p>
                     `;
-                    
+
                     conversationItem.addEventListener('click', () => {
                         selectConversation(conversation.id);
                     });
-                    
+
                     conversationList.appendChild(conversationItem);
                 });
+
+                syncConvSelect();
             } catch (error) {
                 console.error('加载对话失败:', error);
+            }
+        }
+
+        // 同步顶部对话下拉选择器与状态徽章
+        function syncConvSelect() {
+            const select = document.getElementById('conv-select');
+            const statusBadge = document.getElementById('conv-select-status');
+            if (!select) return;
+
+            const previous = currentConversationId || '';
+            select.innerHTML = '<option value="">选择对话…</option>' + conversationsCache.map(c =>
+                `<option value="${c.id}">${c.title}</option>`
+            ).join('');
+            select.value = conversationsCache.some(c => c.id === previous) ? previous : '';
+
+            if (statusBadge) {
+                const current = conversationsCache.find(c => c.id === currentConversationId);
+                if (current) {
+                    const st = convStatusOf(current);
+                    statusBadge.className = 'conv-status-badge ' + st.cls;
+                    statusBadge.innerHTML = '<span class="conv-status-dot"></span>' + st.label;
+                    statusBadge.classList.remove('hidden');
+                } else {
+                    statusBadge.classList.add('hidden');
+                }
             }
         }
         
@@ -1931,11 +1990,14 @@
                 
                 // 更新对话标题
                 document.getElementById('content-title').textContent = conversation.title;
-                
+
                 // 显示聊天内容
                 showChatContent();
                 setCasePanelVisible(true);
                 renderCaseState();
+
+                // 同步顶部下拉选中项与状态徽章
+                syncConvSelect();
                 
                 // 更新消息容器
                 const chatContent = document.getElementById('chat-content');
@@ -4657,8 +4719,15 @@ function displayNodeTypeCounts(counts) {
             // 导航按钮
             document.getElementById('nav-chat').addEventListener('click', function() {
                 showChatContent();
-                // 更新导航按钮状态
+                // 更新导航按钮状态（同时展开侧边栏对话列表）
                 updateNavButtons('chat');
+            });
+
+            // 顶部对话下拉选择器：切换当前对话
+            document.getElementById('conv-select').addEventListener('change', function() {
+                if (this.value) {
+                    selectConversation(this.value);
+                }
             });
             
             document.getElementById('nav-visualize').addEventListener('click', function() {
@@ -4828,8 +4897,12 @@ function displayNodeTypeCounts(counts) {
             document.getElementById('refresh-counts').addEventListener('click', loadNodeTypeCounts);
         }
         
-        // 更新导航按钮状态
+        // 更新导航按钮状态（同时追踪当前内容视图；「对话」时展开侧边栏对话列表）
+        let currentContentView = 'chat';
+        let conversationsCache = [];
+
         function updateNavButtons(activeNav) {
+            currentContentView = activeNav;
             const navButtons = ['chat', 'visualize', 'import', 'material', 'material-query', 'file-manager', 'operationsData'];
             navButtons.forEach(nav => {
                 const button = document.getElementById(`nav-${nav}`);
@@ -4840,6 +4913,9 @@ function displayNodeTypeCounts(counts) {
                     button.classList.remove('active');
                 }
             });
+            // 对话记录列表：仅在「对话」视图展开，其余视图收起
+            const convList = document.getElementById('conversation-list');
+            if (convList) convList.classList.toggle('hidden', activeNav !== 'chat');
         }
         
         // 运维大屏初始化函数
