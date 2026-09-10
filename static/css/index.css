@@ -40,35 +40,35 @@
             pointer-events: none;
         }
 
-        /* 检索面板收起/展开把手（贴画布左缘中部，始终可见） */
-        .kg-panel-toggle {
+        /* 检索面板收起后的展开小圆钮（画布左缘中部，仅收起状态显示） */
+        .kg-panel-expand {
             position: absolute;
-            left: 10px;
+            left: 8px;
             top: 50%;
             transform: translateY(-50%);
             z-index: 35;
-            width: 22px;
-            height: 64px;
+            width: 30px;
+            height: 30px;
             border: 1px solid var(--color-border);
-            border-left: none;
-            border-radius: 0 12px 12px 0;
-            background: rgba(255, 255, 255, 0.95);
-            color: var(--color-secondary);
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.96);
+            color: var(--color-accent);
             cursor: pointer;
-            box-shadow: 2px 0 10px rgba(30, 144, 255, 0.08);
+            box-shadow: 0 2px 10px rgba(30, 144, 255, 0.14);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 0.7rem;
-            transition: all var(--transition-fast);
+            font-size: 0.72rem;
+            transition: all var(--transition-hover);
         }
-        .kg-panel-toggle:hover {
-            color: var(--color-accent);
-            border-color: var(--color-border-light);
-            width: 26px;
+        .kg-panel-expand:hover {
+            background: var(--color-accent);
+            color: #fff;
+            transform: translateY(-50%) scale(1.1);
+            box-shadow: 0 4px 14px rgba(30, 144, 255, 0.3);
         }
-        /* 把手悬浮提示：显示在把手右侧 */
-        .kg-panel-toggle::after {
+        /* 展开小圆钮悬浮提示：显示在右侧 */
+        .kg-panel-expand::after {
             content: attr(data-tip);
             position: absolute;
             left: calc(100% + 10px);
@@ -86,7 +86,7 @@
             transition: opacity 0.18s ease, transform 0.18s ease;
             z-index: 60;
         }
-        .kg-panel-toggle:hover::after {
+        .kg-panel-expand:hover::after {
             opacity: 1;
             transform: translateY(-50%) translateX(0);
         }
