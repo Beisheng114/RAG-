@@ -831,7 +831,7 @@
             <div class="stats-card">
                 <div class="stats-header">
                     <h4>节点类型总数</h4>
-                    <button id="refresh-counts" class="refresh-btn"><i class="fa fa-sync-alt"></i> 刷新</button>
+                    <button id="refresh-counts" class="refresh-btn"><i class="fa fa-refresh"></i> 刷新</button>
                 </div>
                 <div id="node-type-counts" class="stat-list">
                     <!-- 动态内容展示全量节点统计 -->
@@ -864,7 +864,7 @@
             </div>
             <!-- 画布工具栏 -->
             <div id="graph-toolbar" class="kg-toolbar hidden">
-                <button id="kg-btn-relayout" class="kg-tool-btn" title="重新布局"><i class="fa fa-share-alt"></i></button>
+                <button id="kg-btn-relayout" class="kg-tool-btn" title="重新布局"><i class="fa fa-refresh"></i></button>
                 <button id="kg-btn-fit" class="kg-tool-btn" title="适配视野"><i class="fa fa-arrows-alt"></i></button>
                 <button id="kg-btn-edgelabel" class="kg-tool-btn" title="显示/隐藏关系标签"><i class="fa fa-tag"></i></button>
                 <button id="kg-btn-export" class="kg-tool-btn" title="导出 PNG"><i class="fa fa-download"></i></button>
@@ -948,12 +948,12 @@
                                         <div id="relationTypeChart" class="chart-container" style="height: 220px;"></div>
                                     </div>
                                     <div class="sub-section" style="border: none;margin-bottom: 20px;">
-                                        <div class="sub-title"><i class="fa fa-chart-simple"></i> 知识引用热度 TOP5</div>
+                                        <div class="sub-title"><i class="fa fa-fire"></i> 知识引用热度 TOP5</div>
                                         <div id="hotKnowledgeChart" class="chart-container" style="height: 220px;"></div>
                                     </div>
                                     
                                     <div class="sub-section",style="flex: 1; min-width: 150px;margin-top: 20px;">
-                                            <div class="sub-title"><i class="fa fa-chart-pie"></i> 故障装备分布（四机一炉占比）</div>
+                                            <div class="sub-title"><i class="fa fa-pie-chart"></i> 故障装备分布（四机一炉占比）</div>
                                             <div id="equipmentPieChart" class="small-chart" style="height: 250px;"></div>
                                     </div>    
                                 </div>
@@ -992,7 +992,7 @@
                                             <div class="badge-blue" style="margin-top: 6px; display: inline-block;">共 <span id="noAnswerCount">0</span> 条待补充知识</div>
                                         </div>
                                         <div class="sub-section">
-                                        <div class="sub-title"><i class="fa fa-chart-bar"></i> 故障原因分析</div>
+                                        <div class="sub-title"><i class="fa fa-bar-chart"></i> 故障原因分析</div>
                                         <div id="faultCauseChart" class="chart-container" style="height: 400px;"></div>
                                     </div>
                                 </div>
@@ -3396,6 +3396,7 @@ function displayNodeTypeCounts(counts) {
                 },
                 legend: [{
                     data: categories.map(c => c.name),
+                    left: 10,
                     bottom: 10,
                     type: 'scroll',
                     icon: 'circle',
@@ -3424,7 +3425,18 @@ function displayNodeTypeCounts(counts) {
                         value: e.label,
                         label: { show: showEdgeLabels, formatter: p => p.data.value, fontSize: 10, color: '#4682B4' }
                     })),
-                    emphasis: { focus: 'adjacency', lineStyle: { width: 3 } },
+                    emphasis: {
+                        focus: 'adjacency',
+                        lineStyle: { width: 3 },
+                        // 聚焦时：本节点与一跳邻居显示完整名称（不截断）
+                        label: { show: true, fontSize: 12, formatter: p => p.name }
+                    },
+                    // 聚焦时：非关联节点近隐形且隐藏标签（消除密集标签平铺）
+                    blur: {
+                        itemStyle: { opacity: 0.07 },
+                        lineStyle: { opacity: 0.03 },
+                        label: { show: false }
+                    },
                     blurScope: 'coordinateSystem',
                     itemStyle: { borderColor: '#fff', borderWidth: 1 },
                     lineStyle: { color: '#8fb3cf', width: 1.2, curveness: 0.15, opacity: 0.7 },

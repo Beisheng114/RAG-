@@ -578,6 +578,19 @@
         .kg-detail-relations li:hover {
             background: var(--color-hover-bg);
         }
+        .kg-detail-relations li i {
+            color: var(--color-accent-soft);
+            flex: none;
+            font-size: 0.82rem;
+        }
+        .kg-detail-meta i {
+            color: var(--color-secondary);
+            margin-right: 3px;
+        }
+        .kg-detail-hint i {
+            color: var(--color-border);
+            margin-right: 4px;
+        }
         .kg-rel-type {
             color: var(--color-text-active);
             font-weight: 500;
