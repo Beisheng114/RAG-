@@ -191,10 +191,7 @@
     </style>
 
     <link rel="stylesheet" type="text/css" href="./css/index.css">
-    <link rel="stylesheet" type="text/css" href="./css/home.css">
-    <link rel="stylesheet" type="text/css" href="./css/config.css">
-    <link rel="stylesheet" type="text/css" href="./css/kg_admin.css">
-    <link rel="stylesheet" type="text/css" href="./css/extract.css">
+    <link rel="stylesheet" type="text/css" href="./css/theme.css">
 </head>
 <body class="bg-gray-50 text-gray-900 font-sans">
     <!-- 海浪背景 -->
@@ -988,9 +985,9 @@
                     <div class="file-sidebar" style="width: 300px; background: #ffffff; border-right: 1px solid #e2e8f0; display: flex; flex-direction: column; box-shadow: 4px 0 12px rgba(0,0,0,0.02); overflow-y: auto;">
                         <div class="file-sidebar-header" style="padding: 20px 18px 12px; border-bottom: 1px solid #f0f2f5;">
                             <h2 style="font-size: 1.25rem; font-weight: 600; color: #0f172a; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                                <span id="fm-folderStatus" class="folder-badge" style="font-size: 0.7rem; background: #fee2e2; padding: 4px 10px; border-radius: 20px; color: #dc2626; cursor: pointer; transition: 0.1s;">⚡ 未授权</span>
+                                <span id="fm-folderStatus" class="folder-badge" style="font-size: 0.7rem; background: #fee2e2; padding: 4px 10px; border-radius: 20px; color: #dc2626; cursor: pointer; transition: 0.1s;"><i class="fa fa-bolt"></i> 未授权</span>
                                 <button id="fm-refreshTreeBtn" disabled style="background: transparent; border: 1px solid #e2e8f0; border-radius: 6px; padding: 2px 8px; cursor: pointer; font-size: 0.75rem; color: #64748b; transition: 0.2s;" title="刷新文件树">
-                                    🔄
+                                    <i class="fa fa-refresh"></i>
                                 </button>
                             </h2>
                             <div class="btn-group" style="display: flex; gap: 6px; margin-top: 14px; flex-wrap: wrap;">
@@ -1033,13 +1030,13 @@
                                 <textarea id="fm-markdownEditor" placeholder="编写 Markdown 内容... (按 Ctrl+S 或点击保存按钮保存)" style="width: 100%; height: 100%; border: none; resize: none; font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace; font-size: 0.9rem; line-height: 1.7; outline: none; background: transparent; padding: 0; margin: 0; white-space: pre-wrap; overflow-wrap: break-word;"></textarea>
                             </div>
                             <div class="file-preview-pane" id="fm-previewPane" style="width: 50%; overflow-y: auto; padding: 24px; background: #ffffff; border-left: 1px solid #e2e8f0;">
-                                <div class="markdown-body" id="fm-markdownPreview" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif; font-size: 0.9rem; line-height: 1.7; color: #1e293b;">✨实时预览区域</div>
+                                <div class="markdown-body" id="fm-markdownPreview" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif; font-size: 0.9rem; line-height: 1.7; color: #1e293b;"><i class="fa fa-eye"></i> 实时预览区域</div>
                             </div>
                         </div>
                         <div class="file-status" style="padding: 8px 24px; background: #f9fafb; font-size: 0.7rem; color: #475569; border-top: 1px solid #e9eef3; display: flex; justify-content: space-between;">
-                            <span id="fm-currentDocPath">📄 未选中文档</span>
+                            <span id="fm-currentDocPath"><i class="fa fa-file-text-o"></i> 未选中文档</span>
                             <span id="fm-wordStats">0 字符 | 0 行</span>
-                            <span id="fm-saveHint" style="color: #f59e0b;">💾 按 Ctrl+S 保存</span>
+                            <span id="fm-saveHint" style="color: #f59e0b;"><i class="fa fa-save"></i> 按 Ctrl+S 保存</span>
                         </div>
                     </div>
                 </div>
@@ -1302,6 +1299,14 @@
 
 <!--启动页面 script-->
     <script>
+    // 视图切换淡入动效（重启 animation）
+    window.applyFadeIn = function(el) {
+        if (!el) return;
+        el.classList.remove('view-fade-in');
+        void el.offsetWidth; // 强制重绘，重启动画
+        el.classList.add('view-fade-in');
+    };
+
     // 统一 hash 导航入口（全局可访问）：推送历史 + 切换视图
     window.navigateToPage = function(targetPage) {
         history.pushState({ page: targetPage }, getPageTitle(targetPage), getPageUrl(targetPage));
@@ -1325,52 +1330,43 @@
         const extractView = document.getElementById('extract-view');
         const appLayout = document.querySelector('.app-layout');
         
-        console.log('元素状态:', {
-            launchPage: !!launchPage,
-            configView: !!configView,
-            kgadminView: !!kgadminView,
-            extractView: !!extractView,
-            appLayout: !!appLayout
-        });
-        
         if (launchPage) launchPage.classList.add('hidden');
         if (configView) configView.classList.add('hidden');
         if (kgadminView) kgadminView.classList.add('hidden');
         if (extractView) extractView.classList.add('hidden');
         if (appLayout) appLayout.classList.add('hidden');
         
-        // 显示目标视图
+        // 显示目标视图（统一淡入动效）
         if (targetPage === 'config-page') {
             if (configView) {
                 configView.classList.remove('hidden');
-                console.log('显示配置视图');
+                applyFadeIn(configView);
             }
         } else if (targetPage === 'kb-manager-page') {
             if (kgadminView) {
                 kgadminView.classList.remove('hidden');
-                console.log('显示知识库管理视图');
+                applyFadeIn(kgadminView);
             }
         } else if (targetPage === 'extract-page') {
             if (extractView) {
                 extractView.classList.remove('hidden');
-                console.log('显示图谱提取视图');
+                applyFadeIn(extractView);
             }
         } else if (targetPage === 'main-system-page') {
             if (appLayout) {
                 appLayout.classList.remove('hidden');
-                console.log('显示主系统视图');
+                applyFadeIn(appLayout);
             }
         } else {
             // 默认显示启动页
             if (launchPage) {
                 launchPage.classList.remove('hidden');
-                console.log('显示启动页');
+                applyFadeIn(launchPage);
             }
         }
         
         // 更新页面标题
         document.title = getPageTitle(targetPage);
-        console.log('页面切换完成，标题:', document.title);
     };
     
     // 获取页面标题
@@ -2215,7 +2211,7 @@
                     <div class="mb-4">
                         <label class="block text-sm font-medium mb-2">当前路径</label>
                         <div id="saveDialogCurrentPath" class="px-3 py-2 bg-gray-50 rounded-md text-sm text-gray-600 truncate">
-                            📁 根目录
+                            <i class="fa fa-folder"></i> 根目录
                         </div>
                     </div>
                     
@@ -2229,7 +2225,7 @@
                     
                     <!-- 新建文件夹按钮 -->
                     <button id="saveDialogNewFolderBtn" class="w-full mb-3 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-sm flex items-center justify-center gap-2">
-                        📁 新建文件夹
+                        <i class="fa fa-folder"></i> 新建文件夹
                     </button>
                     
                     <!-- 按钮组 -->
@@ -2266,7 +2262,7 @@
                         }
                     }
                     
-                    pathDisplay.textContent = '📁 ' + (currentPath || '根目录');
+                    pathDisplay.textContent = '<i class="fa fa-folder"></i> ' + (currentPath || '根目录');
                     
                     // 读取子文件夹
                     const folders = [];
@@ -2287,11 +2283,11 @@
                     }
                     // 文件夹列表
                     if (folders.length === 0) {
-                        html += '<li class="text-sm text-gray-500 px-2 py-1">📭 无子文件夹</li>';
+                        html += '<li class="text-sm text-gray-500 px-2 py-1"><i class="fa fa-folder-open-o"></i> 无子文件夹</li>';
                     } else {
                         folders.forEach(folder => {
                             html += `<li class="cursor-pointer hover:bg-blue-50 px-2 py-1 rounded text-sm flex items-center gap-2" data-folder="${folder}">
-                                📁 ${folder}
+                                <i class="fa fa-folder"></i> ${folder}
                             </li>`;
                         });
                     }
@@ -2607,7 +2603,7 @@
                     const statistics = data.result?.statistics;
                     
                     let previewHTML = `
-                        <div class="text-blue-600 font-semibold mb-2">✓ 预览成功</div>
+                        <div class="text-blue-600 font-semibold mb-2"><i class="fa fa-check-circle"></i> 预览成功</div>
                         <div class="text-gray-700 space-y-3">
                             <div>
                                 <h5 class="font-medium text-sm mb-1">LLM提取结果：</h5>
@@ -2661,7 +2657,7 @@
                 } else {
                     previewDiv.classList.remove('hidden');
                     previewContent.innerHTML = `
-                        <div class="text-red-600 font-semibold mb-2">✗ 预览失败</div>
+                        <div class="text-red-600 font-semibold mb-2"><i class="fa fa-times-circle"></i> 预览失败</div>
                         <div class="text-gray-700">
                             <p>${data.message || '未知错误'}</p>
                         </div>
@@ -2708,7 +2704,7 @@
                 if (data.success) {
                     resultDiv.classList.remove('hidden');
                     resultContent.innerHTML = `
-                        <div class="text-green-600 font-semibold mb-2">✓ 导入成功</div>
+                        <div class="text-green-600 font-semibold mb-2"><i class="fa fa-check-circle"></i> 导入成功</div>
                         <div class="text-gray-700">
                             <p>案例已成功导入到Neo4j数据库</p>
                             ${data.result ? `<p>详细信息：${JSON.stringify(data.result, null, 2)}</p>` : ''}
@@ -2722,7 +2718,7 @@
                 } else {
                     resultDiv.classList.remove('hidden');
                     resultContent.innerHTML = `
-                        <div class="text-red-600 font-semibold mb-2">✗ 导入失败</div>
+                        <div class="text-red-600 font-semibold mb-2"><i class="fa fa-times-circle"></i> 导入失败</div>
                         <div class="text-gray-700">
                             <p>${data.message || '未知错误'}</p>
                             ${data.result ? `<p>详细信息：${JSON.stringify(data.result, null, 2)}</p>` : ''}
@@ -2765,7 +2761,7 @@
                 if (data.success) {
                     resultDiv.classList.remove('hidden');
                     resultContent.innerHTML = `
-                        <div class="text-green-600 font-semibold mb-2">✓ 导入成功</div>
+                        <div class="text-green-600 font-semibold mb-2"><i class="fa fa-check-circle"></i> 导入成功</div>
                         <div class="text-gray-700">
                             <p>案例已成功导入到Neo4j数据库</p>
                             ${data.result ? `<p>详细信息：${JSON.stringify(data.result, null, 2)}</p>` : ''}
@@ -2777,7 +2773,7 @@
                 } else {
                     resultDiv.classList.remove('hidden');
                     resultContent.innerHTML = `
-                        <div class="text-red-600 font-semibold mb-2">✗ 导入失败</div>
+                        <div class="text-red-600 font-semibold mb-2"><i class="fa fa-times-circle"></i> 导入失败</div>
                         <div class="text-gray-700">
                             <p>${data.message || '未知错误'}</p>
                             ${data.result ? `<p>详细信息：${JSON.stringify(data.result, null, 2)}</p>` : ''}
@@ -2828,6 +2824,8 @@
         // 显示聊天内容
         function showChatContent() {
             document.getElementById('chat-view').classList.remove('hidden');
+
+            applyFadeIn(document.getElementById('chat-view'));
             document.getElementById('import-content').classList.add('hidden');
             document.getElementById('material-content').classList.add('hidden');
             document.getElementById('material-query-content').classList.add('hidden');
@@ -2860,6 +2858,8 @@
             // 显示选中的视图
             if (viewName === 'chat') {
                 document.getElementById('chat-view').classList.remove('hidden');
+
+                applyFadeIn(document.getElementById('chat-view'));
                 document.getElementById('nav-chat').classList.add('active');
                 document.getElementById('content-title').textContent = '对话';
                 document.getElementById('export-menu-container').classList.remove('hidden');
@@ -2873,6 +2873,8 @@
         function showImportContent() {
             document.getElementById('chat-view').classList.add('hidden');
             document.getElementById('import-content').classList.remove('hidden');
+
+            applyFadeIn(document.getElementById('import-content'));
             document.getElementById('visualize-content').classList.add('hidden');
             document.getElementById('material-content').classList.add('hidden');
             document.getElementById('material-query-content').classList.add('hidden');
@@ -2891,6 +2893,8 @@
             document.getElementById('visualize-content').classList.add('hidden');
             document.getElementById('material-query-content').classList.add('hidden');
             document.getElementById('material-content').classList.remove('hidden');
+
+            applyFadeIn(document.getElementById('material-content'));
             document.getElementById('operationsData-content').classList.add('hidden');
             document.getElementById('content-title').textContent = '资料导入';
             document.getElementById('export-menu-container').classList.add('hidden');
@@ -2978,6 +2982,8 @@
             document.getElementById('operationsData-content').classList.add('hidden');
             document.getElementById('file-manager-content').classList.add('hidden');
             document.getElementById('material-query-content').classList.remove('hidden');
+
+            applyFadeIn(document.getElementById('material-query-content'));
             document.getElementById('content-title').textContent = '资料查询';
             document.getElementById('export-menu-container').classList.add('hidden');
             document.getElementById('delete-conversation').classList.add('hidden');
@@ -2993,6 +2999,8 @@
             document.getElementById('material-query-content').classList.add('hidden');
             document.getElementById('operationsData-content').classList.add('hidden');
             document.getElementById('visualize-content').classList.remove('hidden');
+
+            applyFadeIn(document.getElementById('visualize-content'));
             document.getElementById('content-title').textContent = '知识图谱';
             document.getElementById('export-menu-container').classList.add('hidden');
             document.getElementById('delete-conversation').classList.add('hidden');
@@ -3014,6 +3022,8 @@
             document.getElementById('material-query-content').classList.add('hidden');
             document.getElementById('visualize-content').classList.add('hidden');
             document.getElementById('operationsData-content').classList.remove('hidden');
+
+            applyFadeIn(document.getElementById('operationsData-content'));
             document.getElementById('content-title').textContent = '系统运维';
             document.getElementById('export-menu-container').classList.add('hidden');
             document.getElementById('delete-conversation').classList.add('hidden');
@@ -3033,6 +3043,8 @@
             document.getElementById('visualize-content').classList.add('hidden');
             document.getElementById('operationsData-content').classList.add('hidden');
             document.getElementById('file-manager-content').classList.remove('hidden');
+
+            applyFadeIn(document.getElementById('file-manager-content'));
             document.getElementById('content-title').textContent = '文件管理';
             document.getElementById('export-menu-container').classList.add('hidden');
             document.getElementById('delete-conversation').classList.add('hidden');
@@ -4247,7 +4259,7 @@ function displayNodeTypeCounts(counts) {
                         <div class="mb-4">
                             <label class="block text-sm font-medium mb-2">当前路径</label>
                             <div id="saveDialogCurrentPath" class="px-3 py-2 bg-gray-50 rounded-md text-sm text-gray-600 truncate">
-                                📁 根目录
+                                <i class="fa fa-folder"></i> 根目录
                             </div>
                         </div>
                         
@@ -4261,7 +4273,7 @@ function displayNodeTypeCounts(counts) {
                         
                         <!-- 新建文件夹按钮 -->
                         <button id="saveDialogNewFolderBtn" class="w-full mb-3 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-sm flex items-center justify-center gap-2">
-                            📁 新建文件夹
+                            <i class="fa fa-folder"></i> 新建文件夹
                         </button>
                         
                         <!-- 按钮组 -->
@@ -4298,7 +4310,7 @@ function displayNodeTypeCounts(counts) {
                             }
                         }
                         
-                        pathDisplay.textContent = '📁 ' + (currentPath || '根目录');
+                        pathDisplay.textContent = '<i class="fa fa-folder"></i> ' + (currentPath || '根目录');
                         
                         // 读取子文件夹
                         const folders = [];
@@ -4319,11 +4331,11 @@ function displayNodeTypeCounts(counts) {
                         }
                         // 文件夹列表
                         if (folders.length === 0) {
-                            html += '<li class="text-sm text-gray-500 px-2 py-1">📭 无子文件夹</li>';
+                            html += '<li class="text-sm text-gray-500 px-2 py-1"><i class="fa fa-folder-open-o"></i> 无子文件夹</li>';
                         } else {
                             folders.forEach(folder => {
                                 html += `<li class="cursor-pointer hover:bg-blue-50 px-2 py-1 rounded text-sm flex items-center gap-2" data-folder="${folder}">
-                                    📁 ${folder}
+                                    <i class="fa fa-folder"></i> ${folder}
                                 </li>`;
                             });
                         }
@@ -4992,11 +5004,11 @@ function displayNodeTypeCounts(counts) {
                     await writable.write(content);
                     await writable.close();
                     const saveHintSpan = document.getElementById('fm-saveHint');
-                    saveHintSpan.innerText = '✓ 已保存至磁盘';
+                    saveHintSpan.innerText = '已保存至磁盘';
                     saveHintSpan.style.color = '#10b981';
                     setTimeout(() => { 
                         if(saveHintSpan) {
-                            saveHintSpan.innerText = '💾 按 Ctrl+S 保存';
+                            saveHintSpan.innerText = '<i class="fa fa-save"></i> 按 Ctrl+S 保存';
                             saveHintSpan.style.color = '#f59e0b';
                         }
                     }, 2000);
@@ -5025,7 +5037,7 @@ function displayNodeTypeCounts(counts) {
                         document.getElementById('fm-markdownPreview').innerHTML = html;
                     } catch(e) { document.getElementById('fm-markdownPreview').innerHTML = '<p>预览解析错误</p>'; }
                 } else {
-                    document.getElementById('fm-markdownPreview').innerHTML = '<p>⚠️ 需要网络加载 marked 库</p>';
+                    document.getElementById('fm-markdownPreview').innerHTML = '<p><i class="fa fa-exclamation-triangle"></i> 需要网络加载 marked 库</p>';
                 }
             }
 
@@ -5037,7 +5049,7 @@ function displayNodeTypeCounts(counts) {
                     const file = await fileNode.handle.getFile();
                     const text = await file.text();
                     document.getElementById('fm-markdownEditor').value = text;
-                    document.getElementById('fm-currentDocPath').innerHTML = `📄 ${fileNode.name}`;
+                    document.getElementById('fm-currentDocPath').innerHTML = `<i class="fa fa-file-text-o"></i> ${fileNode.name}`;
                     fmUpdateStatsAndPreview();
                     fmShowToast(`已打开：${fileNode.name}`, false);
                     return true;
@@ -5064,7 +5076,7 @@ function displayNodeTypeCounts(counts) {
                     } else {
                         document.getElementById('fm-markdownEditor').value = '# 欢迎使用\n\n您现在可以新建 .md 文档了！';
                         fmUpdateStatsAndPreview();
-                        document.getElementById('fm-currentDocPath').innerHTML = '📄 请新建文档';
+                        document.getElementById('fm-currentDocPath').innerHTML = '<i class="fa fa-file-text-o"></i> 请新建文档';
                     }
                     
                 } catch (err) {
@@ -5117,7 +5129,7 @@ function displayNodeTypeCounts(counts) {
                 const treeContainer = document.getElementById('fm-fileTreeContainer');
                 
                 if (!fmFileTree || fmFileTree.length === 0) {
-                    treeContainer.innerHTML = '<div style="padding:20px;text-align:center;color:#888;">📭 文件夹为空<br>点击新建文档或放入 .md 文件</div>';
+                    treeContainer.innerHTML = '<div style="padding:20px;text-align:center;color:#888;"><i class="fa fa-folder-open-o"></i> 文件夹为空<br>点击新建文档或放入 .md 文件</div>';
                     return;
                 }
                 
@@ -5130,12 +5142,12 @@ function displayNodeTypeCounts(counts) {
                     let html = `<li class="tree-item" data-path="${fmEscapeHtml(node.path)}" data-type="${node.type}">
                                     <div class="tree-item-content ${isActive ? 'active' : ''}" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-radius: 12px; cursor: pointer; transition: background 0.15s; font-size: 0.9rem; margin: 2px 0;">
                                         <span style="display: flex; align-items: center; gap: 10px;">
-                                            <span style="font-size: 1.1rem;">${isFolder ? '📁' : '📄'}</span>
+                                            <span style="font-size: 1.1rem;">${isFolder ? '<i class="fa fa-folder"></i>' : '<i class="fa fa-file-text-o"></i>'}</span>
                                             <span class="item-name" title="${fmEscapeHtml(node.name)}" style="flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: normal;">${fmEscapeHtml(node.name)}</span>
                                         </span>
                                         <div class="item-actions" style="display: none; gap: 8px;">
-                                            ${isFolder ? `<button class="action-btn add-file-in-folder" title="在此文件夹新建文档" style="background: transparent; border: none; cursor: pointer; font-size: 1rem; opacity: 0.6; padding: 0 4px;">📄+</button>` : ''}
-                                            ${isFolder ? `<button class="action-btn add-subfolder" title="新建子文件夹" style="background: transparent; border: none; cursor: pointer; font-size: 1rem; opacity: 0.6; padding: 0 4px;">📂+</button>` : ''}
+                                            ${isFolder ? `<button class="action-btn add-file-in-folder" title="在此文件夹新建文档" style="background: transparent; border: none; cursor: pointer; font-size: 1rem; opacity: 0.6; padding: 0 4px;"><i class="fa fa-file-text-o"></i>+</button>` : ''}
+                                            ${isFolder ? `<button class="action-btn add-subfolder" title="新建子文件夹" style="background: transparent; border: none; cursor: pointer; font-size: 1rem; opacity: 0.6; padding: 0 4px;"><i class="fa fa-folder-o"></i>+</button>` : ''}
                                         </div>
                                     </div>`;
                     
@@ -5370,9 +5382,9 @@ function displayNodeTypeCounts(counts) {
                     fmCurrentFilePath = relPath;
                     fmCurrentFileName = fileName;
                     document.getElementById('fm-markdownEditor').value = content;
-                    document.getElementById('fm-currentDocPath').innerHTML = `📄 ${relPath}`;
+                    document.getElementById('fm-currentDocPath').innerHTML = `<i class="fa fa-file-text-o"></i> ${relPath}`;
                     fmUpdateStatsAndPreview();
-                    document.getElementById('fm-saveHint').innerText = '✓ 已加载';
+                    document.getElementById('fm-saveHint').innerText = '已加载';
                     // 重新渲染树高亮
                     fmRenderFileTree();
                     fmShowToast(`已打开 ${fileName}`, false);
@@ -5496,7 +5508,7 @@ function displayNodeTypeCounts(counts) {
                     fmCurrentFileName = null;
                     fmCurrentFileNode = null;
                     document.getElementById('fm-markdownEditor').value = '';
-                    document.getElementById('fm-currentDocPath').innerHTML = '📄 未选中文档';
+                    document.getElementById('fm-currentDocPath').innerHTML = '<i class="fa fa-file-text-o"></i> 未选中文档';
                     document.getElementById('fm-saveHint').innerText = '';
                     fmUpdateStatsAndPreview();
                     
@@ -5565,7 +5577,7 @@ function displayNodeTypeCounts(counts) {
                         const newFolderPath = parentPath ? `${parentPath}/${newName}` : newName;
                         fmCurrentFilePath = newFolderPath;
                         fmCurrentFileNode = { type: 'folder', path: newFolderPath, name: newName };
-                        document.getElementById('fm-currentDocPath').innerHTML = `📁 ${newFolderPath}`;
+                        document.getElementById('fm-currentDocPath').innerHTML = `<i class="fa fa-folder"></i> ${newFolderPath}`;
                         
                         // 刷新文件树
                         await fmBuildFileTreeFromDirectory(fmRootDirectoryHandle);
@@ -5592,7 +5604,7 @@ function displayNodeTypeCounts(counts) {
                         const newFilePath = parentPath ? `${parentPath}/${newName}` : newName;
                         fmCurrentFilePath = newFilePath;
                         fmCurrentFileName = newName;
-                        document.getElementById('fm-currentDocPath').innerHTML = `📄 ${newFilePath}`;
+                        document.getElementById('fm-currentDocPath').innerHTML = `<i class="fa fa-file-text-o"></i> ${newFilePath}`;
                         
                         // 刷新文件树
                         await fmBuildFileTreeFromDirectory(fmRootDirectoryHandle);
@@ -5626,7 +5638,7 @@ function displayNodeTypeCounts(counts) {
             const isFileSystemSupported = typeof window.showDirectoryPicker === 'function';
             if (!isFileSystemSupported) {
                 document.getElementById('fm-selectFolderBtn').disabled = true;
-                document.getElementById('fm-selectFolderBtn').innerHTML = '⚠️ 浏览器不支持';
+                document.getElementById('fm-selectFolderBtn').innerHTML = '<i class="fa fa-exclamation-triangle"></i> 浏览器不支持';
                 document.getElementById('fm-selectFolderBtn').style.opacity = '0.5';
                 fmShowToast('您的浏览器不支持文件系统访问 API，请使用 Chrome/Edge 86+', true);
             }
@@ -5727,7 +5739,7 @@ function displayNodeTypeCounts(counts) {
                     
                     // 更新状态显示
                     const folderStatusSpan = document.getElementById('fm-folderStatus');
-                    folderStatusSpan.innerHTML = `📁 ${dirHandle.name}`;
+                    folderStatusSpan.innerHTML = `<i class="fa fa-folder"></i> ${dirHandle.name}`;
                     folderStatusSpan.style.background = '#dcfce7';
                     folderStatusSpan.style.color = '#15803d';
                     

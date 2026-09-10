@@ -1,0 +1,257 @@
+/* ============================================================
+   全站主题：设计令牌 + 动效规范 + Tailwind 主题覆盖层
+   （由 config.css / extract.css / kg_admin.css 三份冲突补丁合并而成）
+   ============================================================ */
+
+:root {
+  /* ---- 色板（浅蓝海系，值来自 css/index.css 事实标准） ---- */
+  --color-accent: #1E90FF;        /* 主强调色（Dodger Blue） */
+  --color-accent-soft: #6495ED;   /* 强调色柔和变体 */
+  --color-secondary: #4682B4;     /* 次级文字 / 按钮 */
+  --color-text-strong: #1f3b4c;   /* 深色正文 */
+  --color-text-nav: #2c5a7a;      /* 导航文字 */
+  --color-text-active: #1E6F9F;   /* 导航激活文字 */
+  --color-border: #B0C4DE;        /* 常规边框 */
+  --color-border-light: #87CEFA;  /* hover 边框 */
+  --color-page-bg: #F0F8FF;       /* 页面底色 */
+  --color-hover-bg: #EFF7FF;      /* hover 底色 */
+  --color-link: #0a7be0;          /* 链接蓝 */
+  --color-chip-bg: #D9E9FF;       /* 浅蓝徽章底 */
+
+  /* ---- 圆角 ---- */
+  --radius-card: 16px;            /* 卡片统一圆角 */
+  --radius-panel: 20px;           /* 大面板 */
+  --radius-btn: 10px;             /* 按钮 */
+  --radius-input: 12px;           /* 输入框 */
+
+  /* ---- 阴影 ---- */
+  --shadow-card: 0 4px 12px rgba(30, 144, 255, 0.04);
+  --shadow-card-hover: 0 8px 20px -8px rgba(30, 144, 255, 0.12);
+  --shadow-elevated: 0 6px 16px rgba(30, 144, 255, 0.10);
+
+  /* ---- 动效 ---- */
+  --transition-fast: 0.2s ease;
+  --transition-hover: 0.25s ease;
+
+  /* ---- 知识图谱语义色板（节点=图例=饼图同源） ---- */
+  --kg-equipment: #3b82f6;
+  --kg-component: #10b981;
+  --kg-fault: #ef4444;
+  --kg-faultreason: #f59e0b;
+  --kg-maintenanceaction: #8b5cf6;
+  --kg-safetynotice: #ec4899;
+  --kg-knowledgesource: #6b7280;
+  --kg-category: #14b8a6;
+  --kg-faultphenomenon: #f97316;
+  --kg-faultcause: #eab308;
+  --kg-repairaction: #a855f7;
+  --kg-notice: #f43f5e;
+  --kg-unknown: #9ca3af;
+}
+
+/* ============================================================
+   动效规范（全站统一）
+   ============================================================ */
+
+/* 视图切换淡入 */
+@keyframes viewFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.view-fade-in {
+  animation: viewFadeIn 0.2s ease;
+}
+
+/* 侧栏滑入（图谱详情侧栏等） */
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(24px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.slide-in-right {
+  animation: slideInRight 0.25s ease;
+}
+
+/* 卡片 hover 上浮（配合 Tailwind 卡片使用） */
+.hover-lift {
+  transition: transform var(--transition-hover), box-shadow var(--transition-hover);
+}
+.hover-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card-hover);
+}
+
+/* 统一加载态 */
+.loading-inline {
+  color: var(--color-secondary);
+}
+.loading-inline i::before {
+  content: "\f110"; /* fa-spinner */
+  display: inline-block;
+  animation: faSpin 1s linear infinite;
+  margin-right: 6px;
+}
+@keyframes faSpin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* 无障碍：用户偏好减少动画时全局降级 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ============================================================
+   Tailwind 主题覆盖层（合并自三份补丁，全部引用令牌）
+   说明：内嵌视图（extract/kgadmin/config）大量使用 Tailwind
+   utility，本层将默认灰色系统一映射到浅蓝海主题。
+   ============================================================ */
+
+/* --- 页面/卡片底色 --- */
+.bg-slate-50, .bg-slate-100, .bg-gray-50 {
+  background-color: var(--color-page-bg) !important;
+}
+.bg-white {
+  background-color: #ffffff !important;
+  border: 1px solid var(--color-border) !important;
+  box-shadow: var(--shadow-card);
+  transition: box-shadow var(--transition-fast), border-color var(--transition-fast);
+}
+.bg-white:hover {
+  border-color: var(--color-border-light) !important;
+  box-shadow: var(--shadow-card-hover);
+}
+.bg-slate-900 {
+  background-color: #0f2540 !important;
+}
+
+/* --- 主按钮 --- */
+.bg-blue-600 {
+  background-color: var(--color-accent) !important;
+  transition: all var(--transition-fast);
+}
+.bg-blue-600:hover {
+  background-color: var(--color-accent-soft) !important;
+  transform: translateY(-1px);
+}
+.hover\:bg-blue-50:hover {
+  background-color: var(--color-hover-bg) !important;
+}
+
+/* --- 次级/危险按钮 --- */
+.bg-slate-700 {
+  background-color: var(--color-secondary) !important;
+  transition: all var(--transition-fast);
+}
+.bg-slate-700:hover {
+  background-color: #5F9EA0 !important;
+}
+.bg-slate-600 {
+  background-color: var(--color-secondary) !important;
+  transition: all var(--transition-fast);
+}
+.bg-slate-600:hover {
+  background-color: var(--color-accent-soft) !important;
+}
+.bg-slate-200 {
+  background-color: var(--color-chip-bg) !important;
+  transition: all var(--transition-fast);
+}
+.bg-slate-200:hover {
+  background-color: var(--color-border-light) !important;
+}
+.bg-emerald-600 {
+  background-color: #0e9f6e !important;
+  transition: all var(--transition-fast);
+}
+.bg-emerald-600:hover {
+  background-color: #14b8a6 !important;
+}
+.bg-rose-600 {
+  background-color: #e0245e !important;
+  transition: all var(--transition-fast);
+}
+.bg-rose-600:hover {
+  background-color: #f43f5e !important;
+}
+
+/* --- 文字颜色 --- */
+.text-blue-700, .text-blue-600 {
+  color: var(--color-accent) !important;
+}
+.text-slate-500, .text-slate-600, .text-slate-700 {
+  color: var(--color-secondary) !important;
+}
+.text-slate-800 {
+  color: var(--color-text-strong) !important;
+}
+.text-slate-100 {
+  color: #dce8f5 !important;
+}
+.text-green-600 {
+  color: #0e9f6e !important;
+}
+.text-amber-600 {
+  color: #d97706 !important;
+}
+
+/* --- 边框 --- */
+.border, .border-slate-200, .border-gray-200 {
+  border-color: var(--color-border) !important;
+}
+
+/* --- 表单控件 --- */
+input, select, .border {
+  border-color: var(--color-border) !important;
+  border-radius: var(--radius-input);
+  transition: var(--transition-fast);
+}
+input:focus, select:focus {
+  border-color: var(--color-accent) !important;
+  box-shadow: 0 0 0 3px rgba(30, 144, 255, 0.12);
+  outline: none;
+}
+button {
+  border-radius: var(--radius-btn);
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* --- 标题 / 分隔线 / 图标 --- */
+h2, h3, .font-semibold {
+  color: var(--color-text-strong) !important;
+}
+hr {
+  border-color: var(--color-border) !important;
+}
+i, .fa {
+  color: var(--color-accent);
+}
+a {
+  color: var(--color-link);
+}
+a:hover {
+  color: var(--color-accent);
+}
+code {
+  background-color: var(--color-hover-bg) !important;
+  color: var(--color-text-active) !important;
+  border-radius: 6px;
+  padding: 1px 5px;
+}
+
+/* --- 组件级 --- */
+.rounded-2xl {
+  border-radius: var(--radius-card) !important;
+}
+.shadow-sm {
+  box-shadow: var(--shadow-card) !important;
+}
+canvas {
+  border-radius: var(--radius-card);
+}
