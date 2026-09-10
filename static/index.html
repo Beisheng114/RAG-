@@ -188,8 +188,8 @@
 
     </style>
 
-    <link rel="stylesheet" type="text/css" href="./css/index.css">
-    <link rel="stylesheet" type="text/css" href="./css/theme.css">
+    <link rel="stylesheet" type="text/css" href="./css/index.css?v=20260910">
+    <link rel="stylesheet" type="text/css" href="./css/theme.css?v=20260910">
 </head>
 <body class="bg-gray-50 text-gray-900 font-sans">
     <!-- 海浪背景 -->
@@ -712,6 +712,9 @@
         <div class="panel-content">
             <div class="panel-title">
                 <span>知识图谱探索</span>
+                <button id="kg-panel-collapse" class="panel-collapse-btn" data-tip="收起面板，画布占满全宽">
+                    <i class="fa fa-chevron-left"></i><span>收起</span>
+                </button>
             </div>
 
             <!-- 查询区 -->
@@ -866,12 +869,20 @@
                    <p>点击「显示全部」或执行查询，展示知识图谱</p>
                 </div>
             </div>
-            <!-- 画布工具栏 -->
+            <!-- 画布工具栏（图标 + 文字，免悬停可识别） -->
             <div id="graph-toolbar" class="kg-toolbar hidden">
-                <button id="kg-btn-relayout" class="kg-tool-btn" data-tip="重新布局（重排节点位置）"><i class="fa fa-refresh"></i></button>
-                <button id="kg-btn-fit" class="kg-tool-btn" data-tip="适配视野（缩放复位）"><i class="fa fa-arrows-alt"></i></button>
-                <button id="kg-btn-edgelabel" class="kg-tool-btn" data-tip="显示 / 隐藏关系标签"><i class="fa fa-tag"></i></button>
-                <button id="kg-btn-export" class="kg-tool-btn" data-tip="导出为 PNG 图片"><i class="fa fa-download"></i></button>
+                <button id="kg-btn-relayout" class="kg-tool-btn" data-tip="重排所有节点的布局位置">
+                    <i class="fa fa-refresh"></i><span>重新布局</span>
+                </button>
+                <button id="kg-btn-fit" class="kg-tool-btn" data-tip="缩放与居中复位，显示全图">
+                    <i class="fa fa-arrows-alt"></i><span>适配视野</span>
+                </button>
+                <button id="kg-btn-edgelabel" class="kg-tool-btn" data-tip="在连线上显示关系类型文字">
+                    <i class="fa fa-tag"></i><span>关系标签</span>
+                </button>
+                <button id="kg-btn-export" class="kg-tool-btn" data-tip="把当前图谱保存为 PNG 图片">
+                    <i class="fa fa-download"></i><span>导出图片</span>
+                </button>
             </div>
             <!-- 节点详情侧栏 -->
             <aside id="node-detail-panel" class="kg-detail-panel hidden">
@@ -5017,9 +5028,11 @@ function displayNodeTypeCounts(counts) {
                 document.getElementById('node-detail-panel').classList.add('hidden');
             });
 
-            // 检索面板收起/展开（状态记忆 + 画布尺寸同步）
-            const kgPanelToggle = document.getElementById('kg-panel-toggle');
-            kgPanelToggle.addEventListener('click', function() {
+            // 检索面板收起/展开（双入口：左缘把手 + 面板标题栏「收起」按钮）
+            document.getElementById('kg-panel-toggle').addEventListener('click', function() {
+                toggleQueryPanel();
+            });
+            document.getElementById('kg-panel-collapse').addEventListener('click', function() {
                 toggleQueryPanel();
             });
 
