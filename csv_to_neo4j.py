@@ -117,23 +117,38 @@ class CSVToNeo4jImporter:
                     logger.warning(f"创建索引/约束时出错: {e}")
 
             # 全文索引：用于 CONTAINS 类检索的高频文本字段
+            # Neo4j 5+ 必须用原生 CREATE FULLTEXT INDEX 语法（多标签用 | 连接，
+            # 属性用 ON EACH）；旧版 procedure db.index.fulltext.createNodeIndex
+            # 在 Neo4j 5 中已移除（ProcedureNotFound），仅作 4.x 兜底。
+            # 此前只调 procedure 导致索引从未建成——图谱搜索与主题级检索
+            # 一直静默降级为 0 结果。
             fulltext_queries = [
                 (
+                    # Neo4j 5+ 原生
+                    "CREATE FULLTEXT INDEX idx_fulltext_anchor IF NOT EXISTS "
+                    "FOR (n:Equipment|Component|Fault|FaultPhenomenon|FaultReason|MaintenanceAction|SafetyNotice|KnowledgeSource) "
+                    "ON EACH [n.name, n.description, n.cause_name, n.equipment_id, n.component_id, "
+                    "n.fault_id, n.phenomenon_id, n.cause_id, n.action_id, n.notice_id, n.source_id]",
+                    # Neo4j 4.x procedure 兜底
                     "CALL db.index.fulltext.createNodeIndex('idx_fulltext_anchor', "
                     "['Equipment','Component','Fault','FaultPhenomenon','FaultReason','MaintenanceAction','SafetyNotice','KnowledgeSource'], "
                     "['name','description','cause_name','equipment_id','component_id','fault_id','phenomenon_id','cause_id','action_id','notice_id','source_id'])"
                 ),
                 (
+                    "CREATE FULLTEXT INDEX idx_fulltext_equipment_topic IF NOT EXISTS "
+                    "FOR (n:Equipment) ON EACH [n.name, n.type, n.model]",
                     "CALL db.index.fulltext.createNodeIndex('idx_fulltext_equipment_topic', "
                     "['Equipment'], ['name','type','model'])"
                 ),
             ]
-            for ft_query in fulltext_queries:
+            for native_query, legacy_query in fulltext_queries:
                 try:
-                    session.run(ft_query)
-                except Exception as e:
-                    # Neo4j 5+ 使用 CREATE FULLTEXT INDEX，旧版使用 procedure；这里保持兼容兜底
-                    logger.warning(f"创建全文索引时出错（可能已存在或版本差异）: {e}")
+                    session.run(native_query)
+                except Exception:
+                    try:
+                        session.run(legacy_query)
+                    except Exception as e:
+                        logger.warning(f"创建全文索引时出错（可能已存在或版本差异）: {e}")
 
         logger.info("索引与约束创建完成")
 
