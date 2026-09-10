@@ -856,6 +856,10 @@
 
     <!-- 右侧图谱展示 -->
                     <div class="graph-area">
+        <!-- 检索面板收起/展开把手（贴画布左缘） -->
+        <button id="kg-panel-toggle" class="kg-panel-toggle" title="收起检索面板">
+            <i class="fa fa-chevron-left"></i>
+        </button>
         <div class="graph-card">
             <div id="graph-container" style="width:100%; height:100%;">
                 <div class="graph-placeholder">
@@ -3692,6 +3696,26 @@ function displayNodeTypeCounts(counts) {
             }
         }
 
+        // ---- 检索面板收起/展开 ----
+        function setQueryPanelCollapsed(collapsed, silent) {
+            const panel = document.querySelector('.query-panel');
+            const toggle = document.getElementById('kg-panel-toggle');
+            if (!panel || !toggle) return;
+            panel.classList.toggle('collapsed', collapsed);
+            toggle.title = collapsed ? '展开检索面板' : '收起检索面板';
+            toggle.querySelector('i').className = collapsed ? 'fa fa-chevron-right' : 'fa fa-chevron-left';
+            try { sessionStorage.setItem('kgPanelCollapsed', collapsed ? '1' : '0'); } catch (e) {}
+            // 面板宽度过渡（250ms）结束后同步画布尺寸，避免 ECharts 容器错位
+            if (!silent) {
+                setTimeout(function() { if (kgChart) kgChart.resize(); }, 280);
+            }
+        }
+
+        function toggleQueryPanel() {
+            const panel = document.querySelector('.query-panel');
+            setQueryPanelCollapsed(!panel || !panel.classList.contains('collapsed'));
+        }
+
         // ---- 画布工具栏动作 ----
         function kgRelayout() { if (kgChart) { kgFocusedNodeId = null; kgApplyOption(); } }
         function kgFitView() {
@@ -4945,6 +4969,17 @@ function displayNodeTypeCounts(counts) {
             document.getElementById('kg-detail-close').addEventListener('click', function() {
                 document.getElementById('node-detail-panel').classList.add('hidden');
             });
+
+            // 检索面板收起/展开（状态记忆 + 画布尺寸同步）
+            const kgPanelToggle = document.getElementById('kg-panel-toggle');
+            kgPanelToggle.addEventListener('click', function() {
+                toggleQueryPanel();
+            });
+
+            // 初始化时恢复上次的面板状态
+            if (sessionStorage.getItem('kgPanelCollapsed') === '1') {
+                setQueryPanelCollapsed(true, true);
+            }
             
             // 节点数量限制滑块
             const nodeLimitSlider = document.getElementById('node-limit');
