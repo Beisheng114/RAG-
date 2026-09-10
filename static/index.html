@@ -3313,6 +3313,29 @@ function displayNodeTypeCounts(counts) {
         let kgOffset = 0;          // 浏览模式分页偏移
         let kgEdgeLabelOn = false; // 边标签显隐开关
         let kgExpanding = false;   // 展开邻居进行中标记
+        let kgViewZoom = 1;        // 当前画布缩放倍率（标签字号反向补偿用）
+
+        // 标签字号反向补偿：缩放时节点尺寸只按 nodeScaleRatio 微调，
+        // 文字若 1:1 跟随 zoom 会相对节点过度放大（错位），故除以倍率保持视觉恒定
+        function kgLabelFontSize(base) {
+            const z = kgViewZoom || 1;
+            return Math.round(Math.min(Math.max(base / z, 4), base * 1.3));
+        }
+
+        // 缩放后同步节点/边标签字号（局部 setOption，不触发重布局）
+        function kgSyncLabelSize() {
+            if (!kgChart) return;
+            const nodeFs = kgLabelFontSize(11);
+            const edgeFs = kgLabelFontSize(10);
+            kgChart.setOption({
+                series: [{
+                    id: 'kg',
+                    label: { fontSize: nodeFs },
+                    emphasis: { label: { fontSize: Math.min(nodeFs + 1, 13) } },
+                    links: kgEdges.map(() => ({ label: { fontSize: edgeFs } }))
+                }]
+            });
+        }
 
         function kgTypeName(type) { return KG_TYPE_NAMES[type] || type || '未分类'; }
 
@@ -3364,6 +3387,13 @@ function displayNodeTypeCounts(counts) {
             });
             kgChart.on('dblclick', function(params) {
                 if (params.dataType === 'node') expandNodeNeighbors(params.data.id);
+            });
+            // 画布缩放时同步标签字号（反向补偿，防止文字相对节点过度放大）
+            kgChart.on('graphroam', function(params) {
+                if (params && params.zoom != null && params.zoom !== 1) {
+                    kgViewZoom = Math.max((kgViewZoom || 1) * params.zoom, 0.3);
+                    kgSyncLabelSize();
+                }
             });
             window.addEventListener('resize', function() {
                 if (kgChart && !document.getElementById('visualize-content').classList.contains('hidden')) {
@@ -3467,7 +3497,7 @@ function displayNodeTypeCounts(counts) {
                                 show: showEdgeLabels,
                                 position: 'middle',
                                 formatter: p => p.data.value,
-                                fontSize: 10,
+                                fontSize: kgLabelFontSize(10),
                                 color: '#4682B4',
                                 backgroundColor: 'rgba(255, 255, 255, 0.85)',
                                 padding: [1, 3],
@@ -3479,7 +3509,7 @@ function displayNodeTypeCounts(counts) {
                         focus: 'adjacency',
                         lineStyle: { width: 3 },
                         // 聚焦时：本节点与一跳邻居显示完整名称（不截断）
-                        label: { show: true, fontSize: 12, formatter: p => p.name }
+                        label: { show: true, fontSize: kgLabelFontSize(12), formatter: p => p.name }
                     },
                     // 聚焦时：非关联节点近隐形且隐藏标签（消除密集标签平铺）
                     blur: {
@@ -3490,7 +3520,7 @@ function displayNodeTypeCounts(counts) {
                     blurScope: 'coordinateSystem',
                     itemStyle: { borderColor: '#fff', borderWidth: 1 },
                     lineStyle: { color: '#8fb3cf', width: 1.2, opacity: 0.7 },
-                    label: { show: true, position: 'right', fontSize: 11, color: '#2c5a7a', formatter: p => kgTruncate(p.name, 12) },
+                    label: { show: true, position: 'right', fontSize: kgLabelFontSize(11), color: '#2c5a7a', formatter: p => kgTruncate(p.name, 12) },
                     labelLayout: { hideOverlap: true },
                     // 密集治理：缩放时节点不急剧膨胀（nodeScaleRatio），大图斥力自适应更疏散
                     nodeScaleRatio: 0.2,
@@ -3505,6 +3535,7 @@ function displayNodeTypeCounts(counts) {
 
             // 全量渲染（查询/追加/重布局）后布局坐标已变化，聚焦状态失效
             kgFocusedNodeId = null;
+            kgViewZoom = 1;
             document.getElementById('graph-toolbar').classList.remove('hidden');
             // 大图（>300节点）强制隐藏边标签时，同步按钮熄灭与提示文案
             const edgelabelBtn = document.getElementById('kg-btn-edgelabel');
@@ -3709,7 +3740,9 @@ function displayNodeTypeCounts(counts) {
             // 视口定位到该节点（局部 setOption 只改 center/zoom，不触发 force 重布局）
             const layout = kgNodeLayout(nodeId);
             if (layout) {
+                kgViewZoom = 1.8;
                 kgChart.setOption({ series: [{ id: 'kg', zoom: 1.8, center: [layout[0], layout[1]] }] });
+                kgSyncLabelSize();
             }
             const node = kgNodes[idx];
             kgShowToast(`已聚焦「${kgTruncate(node.label, 10)}」的对应关系，点击空白处退出`, 'info');
@@ -3720,7 +3753,9 @@ function displayNodeTypeCounts(counts) {
             if (!kgChart) return;
             if (kgFocusedNodeId == null) return;
             kgChart.dispatchAction({ type: 'downplay', seriesIndex: 0 });
+            kgViewZoom = 1;
             kgChart.setOption({ series: [{ id: 'kg', zoom: 1, center: ['50%', '50%'] }] });
+            kgSyncLabelSize();
             kgFocusedNodeId = null;
             if (!silent) kgShowToast('已退出聚焦', 'info');
         }
