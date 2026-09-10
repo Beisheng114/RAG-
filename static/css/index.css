@@ -428,6 +428,7 @@
             height: 100%;
             border: 1px solid rgba(100, 149, 237, 0.2);
             transition: all 0.2s;
+
             display: flex;
             align-items: center;
             justify-content: center;
@@ -445,6 +446,207 @@
             font-size: 3rem;
             color: var(--color-border);
         }
+
+        /* ========= 图谱画布工具栏（右上角悬浮） ========= */
+        .kg-toolbar {
+            position: absolute;
+            top: 14px;
+            right: 14px;
+            z-index: 30;
+            display: flex;
+            gap: 6px;
+            padding: 6px;
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(6px);
+            border: 1px solid var(--color-border);
+            border-radius: 12px;
+            box-shadow: 0 4px 14px rgba(30, 144, 255, 0.10);
+        }
+        .kg-tool-btn {
+            width: 34px;
+            height: 34px;
+            border: none;
+            background: transparent;
+            border-radius: 8px;
+            color: var(--color-secondary);
+            cursor: pointer;
+            font-size: 0.95rem;
+            transition: var(--transition-fast);
+        }
+        .kg-tool-btn:hover {
+            background: var(--color-hover-bg);
+            color: var(--color-accent);
+        }
+
+        /* ========= 节点详情侧栏（右侧滑入） ========= */
+        .kg-detail-panel {
+            position: absolute;
+            top: 14px;
+            right: 60px;
+            bottom: 52px;
+            width: 300px;
+            max-width: calc(100% - 90px);
+            z-index: 29;
+            background: rgba(255, 255, 255, 0.97);
+            backdrop-filter: blur(8px);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-card);
+            box-shadow: 0 8px 24px rgba(30, 144, 255, 0.12);
+            padding: 16px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .kg-detail-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .kg-type-badge {
+            font-size: 0.72rem;
+            padding: 3px 10px;
+            border-radius: 999px;
+            color: #fff;
+            background: var(--color-secondary);
+        }
+        .kg-detail-close {
+            border: none;
+            background: transparent;
+            color: var(--color-secondary);
+            cursor: pointer;
+            font-size: 0.9rem;
+            padding: 4px 8px;
+            border-radius: 6px;
+            transition: var(--transition-fast);
+        }
+        .kg-detail-close:hover {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+        .kg-detail-name {
+            font-size: 1.05rem;
+            font-weight: 600;
+            color: var(--color-text-strong);
+            word-break: break-all;
+        }
+        .kg-detail-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            font-size: 0.78rem;
+            color: var(--color-secondary);
+        }
+        .kg-detail-section {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--color-text-active);
+            border-top: 1px dashed var(--color-border);
+            padding-top: 10px;
+            margin-top: 2px;
+        }
+        .kg-detail-desc {
+            font-size: 0.82rem;
+            line-height: 1.6;
+            color: var(--color-text-nav);
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        .kg-rel-count {
+            font-weight: 400;
+            color: var(--color-secondary);
+        }
+        .kg-detail-relations {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .kg-detail-relations li {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.78rem;
+            padding: 6px 8px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: var(--transition-fast);
+            color: var(--color-text-nav);
+        }
+        .kg-detail-relations li:hover {
+            background: var(--color-hover-bg);
+        }
+        .kg-rel-type {
+            color: var(--color-text-active);
+            font-weight: 500;
+        }
+        .kg-rel-arrow {
+            color: var(--color-border);
+        }
+        .kg-rel-node {
+            border: 1px solid var(--color-border);
+            border-radius: 999px;
+            padding: 1px 8px;
+            background: #fff;
+        }
+        .kg-rel-empty {
+            color: var(--color-border);
+            cursor: default;
+        }
+        .kg-detail-hint {
+            margin-top: auto;
+            font-size: 0.72rem;
+            color: var(--color-border);
+            text-align: center;
+            padding-top: 10px;
+        }
+
+        /* ========= 图谱 toast（非阻塞提示） ========= */
+        .kg-toast {
+            position: absolute;
+            bottom: 56px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 40;
+            padding: 8px 18px;
+            border-radius: 999px;
+            font-size: 0.82rem;
+            color: #fff;
+            background: rgba(30, 144, 255, 0.92);
+            box-shadow: 0 4px 14px rgba(30, 144, 255, 0.25);
+            transition: opacity 0.2s ease;
+            pointer-events: none;
+        }
+        .kg-toast.success { background: rgba(14, 159, 110, 0.92); box-shadow: 0 4px 14px rgba(14, 159, 110, 0.25); }
+        .kg-toast.error { background: rgba(224, 36, 94, 0.92); box-shadow: 0 4px 14px rgba(224, 36, 94, 0.25); }
+        .kg-toast.info { background: rgba(30, 144, 255, 0.92); box-shadow: 0 4px 14px rgba(30, 144, 255, 0.25); }
+
+        /* ========= 图谱统计卡片（结构化） ========= */
+        .kg-stat-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+        .kg-stat-item {
+            background: var(--color-page-bg);
+            border: 1px solid var(--color-border);
+            border-radius: 12px;
+            padding: 10px 6px;
+            text-align: center;
+        }
+        .kg-stat-num {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: var(--color-accent);
+        }
+        .kg-stat-label {
+            font-size: 0.68rem;
+            color: var(--color-secondary);
+            margin-top: 2px;
+        }
+
         /* 适应图谱内部动态内容 */
         #graph-container {
             width: 100%;

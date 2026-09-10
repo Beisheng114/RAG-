@@ -11,9 +11,7 @@
     <!-- 代码高亮库 -->
     <link rel="stylesheet" href="libs/highlight-github.min.css">
     <script src="libs/highlight.min.js"></script>
-    <!-- 知识图谱可视化库 -->
-    <script src="libs/vis-network.min.js"></script>
-    <link href="libs/vis-network.min.css" rel="stylesheet">
+    <!-- 知识图谱可视化：ECharts（vis-network 已废弃） -->
     <!-- 图表库 -->
     <script src="libs/chart.umd.min.js"></script>
     <!-- ECharts 可视化库 (运维大屏) -->
@@ -801,14 +799,14 @@
             <!-- 节点限制滑块 -->
             <div style="margin: 1.5rem 0 0.5rem;">
                 <div class="label-light">节点数量限制 <span class="limit-value" id="node-limit-value">200</span></div>
-                <input type="range" id="node-limit" min="50" max="350" value="200" class="slider-custom">
+                <input type="range" id="node-limit" min="50" max="500" value="200" class="slider-custom">
                 <div class="flex justify-between text-xs" style="display: flex; justify-content: space-between; font-size: 0.7rem; color:#6f9cbd; margin-top: 4px;">
                     <span>50</span>
-                    <span>推荐 ≤ 250</span>
-                    <span>350</span>
+                    <span>推荐 ≤ 300</span>
+                    <span>500</span>
                 </div>
                 <p class="text-xs" style="text-align: center; font-size: 0.7rem; color:#F39C12; margin-top: 8px; background:#FFF7E8; border-radius: 30px; padding: 4px 10px;">
-                    超过350节点可能影响性能，请按需调节
+                    超过 300 节点自动隐藏关系标签；超过 500 关闭布局动画
                 </p>
             </div>
 
@@ -856,6 +854,29 @@
                    <p>点击「显示全部」或执行查询，展示知识图谱</p>
                 </div>
             </div>
+            <!-- 画布工具栏 -->
+            <div id="graph-toolbar" class="kg-toolbar hidden">
+                <button id="kg-btn-relayout" class="kg-tool-btn" title="重新布局"><i class="fa fa-share-alt"></i></button>
+                <button id="kg-btn-fit" class="kg-tool-btn" title="适配视野"><i class="fa fa-arrows-alt"></i></button>
+                <button id="kg-btn-edgelabel" class="kg-tool-btn" title="显示/隐藏关系标签"><i class="fa fa-tag"></i></button>
+                <button id="kg-btn-export" class="kg-tool-btn" title="导出 PNG"><i class="fa fa-download"></i></button>
+            </div>
+            <!-- 节点详情侧栏 -->
+            <aside id="node-detail-panel" class="kg-detail-panel hidden">
+                <div class="kg-detail-header">
+                    <span id="kg-detail-type" class="kg-type-badge"></span>
+                    <button id="kg-detail-close" class="kg-detail-close" title="关闭"><i class="fa fa-times"></i></button>
+                </div>
+                <h3 id="kg-detail-name" class="kg-detail-name"></h3>
+                <div id="kg-detail-meta" class="kg-detail-meta"></div>
+                <div id="kg-detail-desc-section" class="kg-detail-section hidden">描述</div>
+                <p id="kg-detail-desc" class="kg-detail-desc"></p>
+                <div class="kg-detail-section">关联关系 <span id="kg-detail-rel-count" class="kg-rel-count"></span></div>
+                <ul id="kg-detail-relations" class="kg-detail-relations"></ul>
+                <div class="kg-detail-hint"><i class="fa fa-hand-pointer-o"></i> 双击节点可展开其邻居</div>
+            </aside>
+            <!-- 图谱 toast -->
+            <div id="kg-toast" class="kg-toast hidden"></div>
         </div>
     </div>
 </div>
@@ -1534,9 +1555,6 @@
         let currentCaseState = null;
         let caseStateSaveTimer = null;
         let caseStateSaveController = null;
-        let network = null;
-        let currentGraph = null;
-        
         // API基础URL
         const API_BASE_URL = 'http://localhost:8002/api';
 
@@ -3009,7 +3027,10 @@
             
             // 加载节点类型总数
             await loadNodeTypeCounts();
-            
+
+            // 图谱容器尺寸同步（tab 切回 / 首次进入）
+            if (kgChart) kgChart.resize();
+
             // 默认显示全部知识图谱
             executeGraphQuery('');
         }
@@ -3192,299 +3213,428 @@ function displayNodeTypeCounts(counts) {
             }
         }
         
+        // ============ 知识图谱可视化（ECharts 渲染层） ============
+        // 类型中文名 / 形状 / 尺寸
+        const KG_TYPE_NAMES = {
+            Equipment: '设备', Component: '部件', Fault: '故障',
+            FaultReason: '故障原因', MaintenanceAction: '维修措施',
+            SafetyNotice: '安全注意事项', KnowledgeSource: '知识来源',
+            Category: '分类', FaultPhenomenon: '故障现象',
+            FaultCause: '故障原因', RepairAction: '维修措施',
+            Notice: '注意事项', Unknown: '未分类'
+        };
+        const KG_TYPE_SYMBOLS = {
+            Equipment: 'rect', Component: 'circle', Fault: 'diamond',
+            FaultReason: 'triangle', MaintenanceAction: 'pin',
+            SafetyNotice: 'roundRect', KnowledgeSource: 'square'
+        };
+        const KG_TYPE_SIZES = { Equipment: 46, Component: 34, Fault: 38 };
+
+        let kgChart = null;        // ECharts 实例（一次初始化，setOption 增量更新）
+        let kgNodes = [];          // 原始节点缓存（详情侧栏/增量合并的数据源）
+        let kgEdges = [];          // 原始边缓存
+        let kgOffset = 0;          // 浏览模式分页偏移
+        let kgEdgeLabelOn = false; // 边标签显隐开关
+        let kgExpanding = false;   // 展开邻居进行中标记
+
+        function kgTypeName(type) { return KG_TYPE_NAMES[type] || type || '未分类'; }
+
+        function kgTypeColor(type) {
+            // 读设计令牌 --kg-*（节点=图例=饼图同色源）
+            const key = '--kg-' + String(type || 'unknown').toLowerCase();
+            const val = getComputedStyle(document.documentElement).getPropertyValue(key).trim();
+            return val || '#9ca3af';
+        }
+
+        // 图谱非阻塞 toast（替代 alert）
+        let kgToastTimer = null;
+        function kgShowToast(msg, type) {
+            const el = document.getElementById('kg-toast');
+            if (!el) return;
+            el.textContent = msg;
+            el.className = 'kg-toast ' + (type || 'info');
+            el.classList.remove('hidden');
+            clearTimeout(kgToastTimer);
+            kgToastTimer = setTimeout(() => el.classList.add('hidden'), 2600);
+        }
+
+        function kgTruncate(s, n) {
+            s = String(s || '');
+            return s.length > n ? s.slice(0, n) + '…' : s;
+        }
+
+        function kgExtractDesc(title) {
+            const line = String(title || '').split('\n').find(l => l.startsWith('描述:'));
+            return line ? line.slice(3).trim() : '';
+        }
+
+        function ensureKgChart() {
+            if (kgChart) return kgChart;
+            const container = document.getElementById('graph-container');
+            const ph = container.querySelector('.graph-placeholder');
+            if (ph) ph.remove();
+            kgChart = echarts.init(container);
+            // 单击：详情侧栏；双击：展开邻居
+            kgChart.on('click', function(params) {
+                if (params.dataType === 'node') {
+                    const raw = kgNodes.find(n => n.id === params.data.id);
+                    if (raw) showNodeDetail(raw);
+                }
+            });
+            kgChart.on('dblclick', function(params) {
+                if (params.dataType === 'node') expandNodeNeighbors(params.data.id);
+            });
+            window.addEventListener('resize', function() {
+                if (kgChart && !document.getElementById('visualize-content').classList.contains('hidden')) {
+                    kgChart.resize();
+                }
+            });
+            return kgChart;
+        }
+
+        function kgComputeStats() {
+            const nodeTypes = {};
+            kgNodes.forEach(n => { nodeTypes[n.type] = (nodeTypes[n.type] || 0) + 1; });
+            return { total_nodes: kgNodes.length, total_edges: kgEdges.length, node_types: nodeTypes };
+        }
+
+        function kgTooltipFormatter(params) {
+            if (params.dataType === 'edge') {
+                return '关系：' + escapeHtml(params.data.value || '');
+            }
+            const d = params.data;
+            if (!d) return '';
+            let html = '<b>' + escapeHtml(d.name || '') + '</b><br/>类型：' + kgTypeName(d.kgType);
+            if (d.kgSystem) html += '<br/>所属系统：' + escapeHtml(d.kgSystem);
+            if (d.kgDesc) html += '<br/>' + escapeHtml(String(d.kgDesc).slice(0, 140));
+            return html;
+        }
+
+        // 构造并应用 ECharts option（查询/分页追加/展开/重布局/边标签开关共用出口）
+        function kgApplyOption() {
+            const chart = ensureKgChart();
+            const types = Array.from(new Set(kgNodes.map(n => n.type)));
+            const categories = types.map(t => ({ name: kgTypeName(t), itemStyle: { color: kgTypeColor(t) } }));
+            const catIndex = {};
+            types.forEach((t, i) => { catIndex[t] = i; });
+
+            const showEdgeLabels = kgEdgeLabelOn && kgNodes.length <= 300;
+
+            chart.setOption({
+                backgroundColor: 'transparent',
+                tooltip: {
+                    trigger: 'item',
+                    confine: true,
+                    formatter: kgTooltipFormatter,
+                    extraCssText: 'max-width:320px;white-space:normal;'
+                },
+                legend: [{
+                    data: categories.map(c => c.name),
+                    bottom: 10,
+                    type: 'scroll',
+                    icon: 'circle',
+                    textStyle: { color: '#2c5a7a', fontSize: 11 },
+                    pageIconColor: '#1E90FF'
+                }],
+                series: [{
+                    id: 'kg',
+                    type: 'graph',
+                    layout: 'force',
+                    roam: true,
+                    categories: categories,
+                    data: kgNodes.map(n => ({
+                        id: n.id,
+                        name: n.label,
+                        category: catIndex[n.type] != null ? catIndex[n.type] : 0,
+                        symbol: KG_TYPE_SYMBOLS[n.type] || 'circle',
+                        symbolSize: KG_TYPE_SIZES[n.type] || 26,
+                        kgType: n.type,
+                        kgSystem: n.system_name || '',
+                        kgDesc: kgExtractDesc(n.title)
+                    })),
+                    links: kgEdges.map(e => ({
+                        source: e.from,
+                        target: e.to,
+                        value: e.label,
+                        label: { show: showEdgeLabels, formatter: p => p.data.value, fontSize: 10, color: '#4682B4' }
+                    })),
+                    emphasis: { focus: 'adjacency', lineStyle: { width: 3 } },
+                    blurScope: 'coordinateSystem',
+                    itemStyle: { borderColor: '#fff', borderWidth: 1 },
+                    lineStyle: { color: '#8fb3cf', width: 1.2, curveness: 0.15, opacity: 0.7 },
+                    label: { show: true, position: 'right', fontSize: 11, color: '#2c5a7a', formatter: p => kgTruncate(p.name, 12) },
+                    labelLayout: { hideOverlap: true },
+                    force: {
+                        repulsion: 180,
+                        edgeLength: [50, 120],
+                        gravity: 0.1,
+                        layoutAnimation: kgNodes.length <= 500
+                    }
+                }]
+            }, { notMerge: true });
+
+            document.getElementById('graph-toolbar').classList.remove('hidden');
+        }
+
+        // 渲染图谱（append=true 时按节点 id / 边键去重合并）
+        function renderGraph(nodes, edges, opts) {
+            const append = !!(opts && opts.append);
+            ensureKgChart();
+            if (append) {
+                const nodeIds = new Set(kgNodes.map(n => n.id));
+                const edgeKeys = new Set(kgEdges.map(e => e.from + '\u0001' + e.to + '\u0001' + e.label));
+                (nodes || []).forEach(n => {
+                    if (!nodeIds.has(n.id)) {
+                        nodeIds.add(n.id);
+                        kgNodes.push({ id: n.id, label: n.label, type: n.type, title: n.title, system_name: n.system_name });
+                    }
+                });
+                (edges || []).forEach(e => {
+                    const from = e.from_id != null ? e.from_id : e.from;
+                    const to = e.to_id != null ? e.to_id : e.to;
+                    const key = from + '\u0001' + to + '\u0001' + e.label;
+                    if (!edgeKeys.has(key)) {
+                        edgeKeys.add(key);
+                        kgEdges.push({ from: from, to: to, label: e.label });
+                    }
+                });
+            } else {
+                kgNodes = (nodes || []).map(n => ({ id: n.id, label: n.label, type: n.type, title: n.title, system_name: n.system_name }));
+                kgEdges = (edges || []).map(e => ({
+                    from: e.from_id != null ? e.from_id : e.from,
+                    to: e.to_id != null ? e.to_id : e.to,
+                    label: e.label
+                }));
+            }
+            kgApplyOption();
+        }
+
         // 显示全部知识图谱
         async function showAllGraph() {
-            console.log('显示全部知识图谱');
+            kgOffset = 0;
             const nodeLimit = document.getElementById('node-limit').value;
-            executeGraphQuery('', nodeLimit);
-            // 显示加载更多按钮
-            document.getElementById('load-more').classList.remove('hidden');
+            await executeGraphQuery('', nodeLimit, 0);
         }
-        
+
+        // 加载更多（浏览模式真分页：offset += node_limit）
         async function loadMoreGraph() {
-            console.log('加载更多节点');
-            alert('加载更多功能正在开发中，请使用关键词查询特定节点');
+            const loadMoreBtn = document.getElementById('load-more');
+            if (loadMoreBtn.disabled) return;
+            const nodeLimit = parseInt(document.getElementById('node-limit').value, 10);
+            await executeGraphQuery('', nodeLimit, kgOffset + nodeLimit, { append: true });
         }
-        
+
         // 执行图谱查询
-        async function executeGraphQuery(query = '', nodeLimit = null) {
+        async function executeGraphQuery(query = '', nodeLimit = null, offset = 0, opts = {}) {
+            const append = !!opts.append;
             const entityType = document.getElementById('entity-type').value;
             const systemName = document.getElementById('system-name')?.value || 'all';
-            
-            // 如果没有传入nodeLimit，使用滑块的值
             if (nodeLimit === null) {
                 nodeLimit = document.getElementById('node-limit').value;
             }
-            
-            console.log('执行图谱查询:', { query, entityType, systemName, nodeLimit });
-            
+
+            const execBtn = document.getElementById('execute-query');
+            const originalBtn = execBtn.innerHTML;
+            execBtn.disabled = true;
+            execBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> 查询中...';
+
             try {
                 const response = await fetch(`${API_BASE_URL}/graph/query`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         query: query,
                         entity_type: entityType,
-                        node_limit: parseInt(nodeLimit),
-                        system_name: systemName
+                        node_limit: parseInt(nodeLimit, 10),
+                        system_name: systemName,
+                        offset: parseInt(offset, 10) || 0
                     })
                 });
-                
-                console.log('图谱查询响应状态:', response.status);
-                
                 const data = await response.json();
-                console.log('图谱查询响应数据:', data);
-                
                 if (data.success) {
-                    console.log('渲染图谱:', { nodes: data.nodes.length, edges: data.edges.length });
-                    renderGraph(data.nodes, data.edges);
-                    updateGraphStats(data.stats);
+                    renderGraph(data.nodes, data.edges, { append: append });
+                    updateGraphStats(kgComputeStats());
+                    // 分页状态：仅浏览模式（无关键词）支持
+                    if (!query || !query.trim()) {
+                        kgOffset = parseInt(offset, 10) || 0;
+                        const hasMore = !!(data.stats && data.stats.has_more);
+                        const loadMoreBtn = document.getElementById('load-more');
+                        loadMoreBtn.classList.remove('hidden');
+                        loadMoreBtn.disabled = !hasMore;
+                        loadMoreBtn.textContent = hasMore ? '加载更多' : '已加载全部';
+                    } else {
+                        document.getElementById('load-more').classList.add('hidden');
+                    }
+                    if (!data.nodes.length && !append) {
+                        kgShowToast('未找到匹配的节点', 'info');
+                    } else if (append) {
+                        kgShowToast(`已追加 ${data.nodes.length} 个节点`, 'success');
+                    }
                 } else {
-                    console.error('查询失败:', data.message);
-                    alert('查询失败: ' + (data.message || '未知错误'));
+                    kgShowToast('查询失败: ' + (data.message || '未知错误'), 'error');
                 }
             } catch (error) {
-                console.error('执行图谱查询失败:', error);
-                alert('查询失败: ' + (error.message || '未知错误'));
+                kgShowToast('查询失败: ' + (error.message || '未知错误'), 'error');
+            } finally {
+                execBtn.disabled = false;
+                execBtn.innerHTML = originalBtn;
             }
         }
-        
-        // 渲染知识图谱
-        function renderGraph(nodes, edges) {
-            const container = document.getElementById('graph-container');
-            
-            // 清空容器
-            container.innerHTML = '';
-            
-            // 准备数据
-            const visNodes = nodes.map(node => ({
-                id: node.id,
-                label: node.label && node.label.length > 15 ? node.label.substring(0, 15) + '...' : (node.label || node.id),
-                title: `${node.label} (${node.type})${node.system_name ? `\n所属系统: ${node.system_name}` : ''}`,
-                group: node.type,
-                color: {
-                    background: getNodeColor(node.type),
-                    border: getNodeColor(node.type),
-                    highlight: {
-                        background: '#ffffff',
-                        border: getNodeColor(node.type)
-                    },
-                    hover: {
-                        background: '#f3f4f6',
-                        border: getNodeColor(node.type)
-                    }
-                },
-                shape: getNodeShape(node.type),
-                size: node.type === 'Equipment' ? 25 : (node.type === 'Component' ? 20 : 15)
-            }));
-            
-            const visEdges = edges.map(edge => ({
-                from: edge.from_id || edge.from,
-                to: edge.to_id || edge.to,
-                label: edge.label,
-                title: edge.label
-            }));
-            
-            const data = {
-                nodes: visNodes,
-                edges: visEdges
-            };
-            
-            const options = {
-                nodes: {
-                    shape: 'dot',
-                    size: 20,
-                    font: {
-                        size: 12,
-                        face: 'Arial',
-                        color: '#333333',
-                        strokeWidth: 2,
-                        strokeColor: '#ffffff'
-                    },
-                    borderWidth: 1,
-                    shadow: {
-                        enabled: false
-                    }
-                },
-                edges: {
-                    width: 1,
-                    color: {
-                        color: '#848484',
-                        highlight: '#3b82f6',
-                        hover: '#3b82f6'
-                    },
-                    font: {
-                        size: 10,
-                        face: 'Arial',
-                        color: '#666666',
-                        background: '#ffffff',
-                        strokeWidth: 2,
-                        strokeColor: '#ffffff'
-                    },
-                    smooth: {
-                        type: 'continuous',
-                        roundness: 0.5
-                    },
-                    arrows: {
-                        to: {
-                            enabled: true,
-                            scaleFactor: 0.3
-                        }
-                    }
-                },
-                layout: {
-                    improvedLayout: true
-                },
-                interaction: {
-                    zoomView: true,
-                    dragView: true,
-                    hover: true,
-                    tooltipDelay: 200
-                },
-                physics: {
-                    enabled: true,
-                    barnesHut: {
-                        gravitationalConstant: -3000,
-                        centralGravity: 0.3,
-                        springLength: 95,
-                        springConstant: 0.04,
-                        damping: 0.09,
-                        avoidOverlap: 0.2
-                    },
-                    stabilization: {
-                        enabled: true,
-                        iterations: 1000,
-                        updateInterval: 50,
-                        onlyDynamicEdges: false,
-                        fit: true
-                    }
-                }
-            };
-            
-            // 创建网络
-            currentGraph = new vis.Network(container, data, options);
-            
-            // 添加事件监听
-            currentGraph.on('click', function(params) {
-                if (params.nodes.length > 0) {
-                    const nodeId = params.nodes[0];
-                    const node = nodes.find(n => n.id === nodeId);
-                    if (node) {
-                        console.log('点击节点:', node);
-                    }
-                }
+
+        // ---- 节点详情侧栏 ----
+        function showNodeDetail(node) {
+            const panel = document.getElementById('node-detail-panel');
+            if (!node || !panel) return;
+            const badge = document.getElementById('kg-detail-type');
+            badge.textContent = kgTypeName(node.type);
+            badge.style.background = kgTypeColor(node.type);
+            badge.style.color = '#fff';
+
+            document.getElementById('kg-detail-name').textContent = node.label || node.id;
+
+            const meta = [];
+            if (node.system_name) meta.push('<span><i class="fa fa-cogs"></i> ' + escapeHtml(node.system_name) + '</span>');
+            meta.push('<span><i class="fa fa-hashtag"></i> ID: ' + escapeHtml(String(node.id)) + '</span>');
+            document.getElementById('kg-detail-meta').innerHTML = meta.join('');
+
+            const desc = kgExtractDesc(node.title);
+            document.getElementById('kg-detail-desc-section').classList.toggle('hidden', !desc);
+            document.getElementById('kg-detail-desc').textContent = desc;
+
+            // 关联关系列表（从缓存提取）
+            const rels = kgEdges.filter(e => e.from === node.id || e.to === node.id).map(e => {
+                const otherId = e.from === node.id ? e.to : e.from;
+                const other = kgNodes.find(n => n.id === otherId);
+                const outgoing = e.from === node.id;
+                return {
+                    rel: e.label, otherId: otherId,
+                    otherName: other ? other.label : otherId,
+                    otherType: other ? other.type : 'Unknown',
+                    outgoing: outgoing
+                };
             });
-            
-            currentGraph.on('stabilizationIterationsDone', function() {
-                console.log('图谱稳定完成');
-            });
-        }
-        
-        // 获取节点颜色
-        function getNodeColor(type) {
-            const colorMap = {
-                'Equipment': '#3b82f6',      // 蓝色
-                'Component': '#10b981',      // 绿色
-                'Fault': '#ef4444',          // 红色
-                'FaultReason': '#f59e0b',    // 橙色
-                'MaintenanceAction': '#8b5cf6', // 紫色
-                'SafetyNotice': '#ec4899',   // 粉色
-                'KnowledgeSource': '#6b7280', // 灰色
-                'Category': '#14b8a6',       // 青色
-                'FaultPhenomenon': '#f97316', // 橙红色
-                'FaultCause': '#eab308',     // 黄色
-                'RepairAction': '#a855f7',   // 深紫色
-                'Notice': '#f43f5e',         // 玫瑰红
-                'Unknown': '#9ca3af'         // 浅灰色
-            };
-            return colorMap[type] || '#9ca3af';
-        }
-        
-        // 获取节点形状
-        function getNodeShape(type) {
-            const shapeMap = {
-                'Equipment': 'box',
-                'Component': 'dot',
-                'Fault': 'diamond',
-                'FaultReason': 'triangle',
-                'MaintenanceAction': 'star',
-                'SafetyNotice': 'hexagon',
-                'KnowledgeSource': 'square'
-            };
-            return shapeMap[type] || 'dot';
-        }
-        
-        // 更新图谱统计信息
-        function updateGraphStats(stats) {
-            const statsContainer = document.getElementById('graph-stats');
-            statsContainer.innerHTML = '';
-            
-            if (stats) {
-                // 显示基本统计信息
-                Object.entries(stats).forEach(([key, value]) => {
-                    if (key !== 'node_types') {
-                        const statItem = document.createElement('div');
-                        statItem.textContent = `${key}: ${value}`;
-                        statsContainer.appendChild(statItem);
+            document.getElementById('kg-detail-rel-count').textContent = '(' + rels.length + ')';
+            const ul = document.getElementById('kg-detail-relations');
+            ul.innerHTML = rels.slice(0, 50).map(r => `
+                <li data-node-id="${escapeHtml(String(r.otherId))}">
+                    <i class="fa ${r.outgoing ? 'fa-arrow-circle-o-right' : 'fa-arrow-circle-o-left'}"></i>
+                    <span class="kg-rel-type">${escapeHtml(r.rel)}</span>
+                    <span class="kg-rel-arrow">${r.outgoing ? '→' : '←'}</span>
+                    <span class="kg-rel-node">${escapeHtml(kgTruncate(r.otherName, 14))}</span>
+                </li>`).join('') || '<li class="kg-rel-empty">暂无关联关系</li>';
+            // 点击关联项：高亮对端节点并展示其详情
+            ul.querySelectorAll('li[data-node-id]').forEach(li => {
+                li.addEventListener('click', function() {
+                    const target = kgNodes.find(n => n.id === this.dataset.nodeId);
+                    if (target) {
+                        focusNode(target.id);
+                        showNodeDetail(target);
                     }
                 });
-                
-                // 创建节点类型分布饼图
-                if (stats.node_types){
-                    createNodeTypeChart(stats.node_types);
+            });
+            panel.classList.remove('hidden');
+            panel.classList.remove('slide-in-right');
+            void panel.offsetWidth;
+            panel.classList.add('slide-in-right');
+        }
+
+        // 高亮指定节点（邻接高亮）
+        function focusNode(nodeId) {
+            if (!kgChart) return;
+            const idx = kgNodes.findIndex(n => n.id === nodeId);
+            if (idx < 0) return;
+            kgChart.dispatchAction({ type: 'highlight', seriesIndex: 0, dataIndex: idx });
+        }
+
+        // 双击展开邻居（增量拉取一度邻居并入图）
+        async function expandNodeNeighbors(nodeId) {
+            if (kgExpanding || !nodeId) return;
+            kgExpanding = true;
+            kgShowToast('正在展开邻居节点...', 'info');
+            try {
+                const resp = await fetch(`${API_BASE_URL}/graph/node/${encodeURIComponent(nodeId)}/neighbors?limit=20`);
+                const data = await resp.json();
+                if (data.success && data.nodes.length) {
+                    renderGraph(data.nodes, data.edges, { append: true });
+                    updateGraphStats(kgComputeStats());
+                    focusNode(nodeId);
+                    kgShowToast(`已展开 ${data.nodes.length} 个节点`, 'success');
+                } else {
+                    kgShowToast(data.message || '该节点没有更多邻居', 'info');
                 }
+            } catch (e) {
+                kgShowToast('展开失败: ' + (e.message || '未知错误'), 'error');
+            } finally {
+                kgExpanding = false;
             }
         }
-        
-        // 创建节点类型分布饼图
+
+        // ---- 画布工具栏动作 ----
+        function kgRelayout() { if (kgChart) kgApplyOption(); }
+        function kgFitView() { if (kgChart) kgApplyOption(); }
+        function kgToggleEdgeLabels() {
+            kgEdgeLabelOn = !kgEdgeLabelOn;
+            if (kgChart) kgApplyOption();
+            kgShowToast(kgEdgeLabelOn ? '已显示关系标签' : '已隐藏关系标签', 'info');
+        }
+        function kgExportPng() {
+            if (!kgChart) return;
+            const url = kgChart.getDataURL({ type: 'png', pixelRatio: 2, backgroundColor: '#F0F8FF' });
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `知识图谱_${new Date().toISOString().slice(0, 10)}.png`;
+            a.click();
+            kgShowToast('已导出 PNG', 'success');
+        }
+
+        // 更新图谱统计信息（结构化卡片）
+        function updateGraphStats(stats) {
+            const statsContainer = document.getElementById('graph-stats');
+            if (!statsContainer || !stats) return;
+            const nodes = stats.total_nodes != null ? stats.total_nodes : 0;
+            const edgeCount = stats.total_edges != null ? stats.total_edges : 0;
+            const typeCount = Object.keys(stats.node_types || {}).length;
+            statsContainer.innerHTML = `
+                <div class="kg-stat-grid">
+                    <div class="kg-stat-item"><div class="kg-stat-num">${nodes}</div><div class="kg-stat-label">当前节点</div></div>
+                    <div class="kg-stat-item"><div class="kg-stat-num">${edgeCount}</div><div class="kg-stat-label">关系连线</div></div>
+                    <div class="kg-stat-item"><div class="kg-stat-num">${typeCount}</div><div class="kg-stat-label">节点类型</div></div>
+                </div>`;
+            if (stats.node_types) createNodeTypeChart(stats.node_types);
+        }
+
+        // 创建节点类型分布环形图（与节点同色源 --kg-*）
         function createNodeTypeChart(entityTypes) {
             const ctx = document.getElementById('nodeTypeChart').getContext('2d');
-            
-            // 准备数据
             const labels = [];
             const data = [];
-            const backgroundColors = [
-                '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
-                '#ec4899', '#06b6d4', '#14b8a6', '#84cc16', '#f97316'
-            ];
-            
-            Object.entries(entityTypes).forEach(([type, count], index) => {
+            const bgColors = [];
+            Object.entries(entityTypes).forEach(([type, count]) => {
                 if (count > 0) {
-                    labels.push(type);
+                    labels.push(kgTypeName(type));
                     data.push(count);
+                    bgColors.push(kgTypeColor(type));
                 }
             });
-            
-            // 销毁旧图表
+
             if (window.nodeTypeChart && typeof window.nodeTypeChart.destroy === 'function') {
                 window.nodeTypeChart.destroy();
             }
-            
-            // 创建新图表
+
             window.nodeTypeChart = new Chart(ctx, {
-                type: 'pie',
+                type: 'doughnut',
                 data: {
                     labels: labels,
-                    datasets: [{
-                        data: data,
-                        backgroundColor: backgroundColors.slice(0, data.length),
-                        borderWidth: 1
-                    }]
+                    datasets: [{ data: data, backgroundColor: bgColors, borderWidth: 2, borderColor: '#fff' }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    cutout: '55%',
                     plugins: {
                         legend: {
                             position: 'bottom',
-                            labels: {
-                                font: {
-                                    size: 12
-                                },
-                                padding: 15
-                            }
+                            labels: { font: { size: 11 }, padding: 12, boxWidth: 10 }
                         },
                         tooltip: {
                             callbacks: {
@@ -3492,7 +3642,7 @@ function displayNodeTypeCounts(counts) {
                                     const label = context.label || '';
                                     const value = context.raw || 0;
                                     const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                    const percentage = Math.round((value / total) * 100);
+                                    const percentage = total ? Math.round((value / total) * 100) : 0;
                                     return `${label}: ${value} (${percentage}%)`;
                                 }
                             }
@@ -3501,7 +3651,7 @@ function displayNodeTypeCounts(counts) {
                 }
             });
         }
-        
+                
         // 维修记录管理模块
         const MaintenanceRecordManager = {
             // 初始化
@@ -4649,6 +4799,17 @@ function displayNodeTypeCounts(counts) {
             
             // 加载更多
             document.getElementById('load-more').addEventListener('click', loadMoreGraph);
+
+            // 图谱画布工具栏
+            document.getElementById('kg-btn-relayout').addEventListener('click', kgRelayout);
+            document.getElementById('kg-btn-fit').addEventListener('click', kgFitView);
+            document.getElementById('kg-btn-edgelabel').addEventListener('click', kgToggleEdgeLabels);
+            document.getElementById('kg-btn-export').addEventListener('click', kgExportPng);
+
+            // 节点详情侧栏关闭
+            document.getElementById('kg-detail-close').addEventListener('click', function() {
+                document.getElementById('node-detail-panel').classList.add('hidden');
+            });
             
             // 节点数量限制滑块
             const nodeLimitSlider = document.getElementById('node-limit');
@@ -5790,6 +5951,132 @@ function displayNodeTypeCounts(counts) {
             // 延迟初始化以确保 marked 库已加载
             setTimeout(initFileManager, 500);
         });
+    </script>
+
+    <!-- ============ antd 风格上传控件（渐进增强：包装原生 input[type=file]，无 React 依赖） ============ -->
+    <script>
+    (function() {
+      'use strict';
+
+      function formatSize(bytes) {
+        if (bytes == null) return '';
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+        return (bytes / 1024 / 1024).toFixed(2) + ' MB';
+      }
+
+      function hintFromAccept(input) {
+        var custom = input.getAttribute('data-ant-hint');
+        if (custom) return custom;
+        var accept = input.getAttribute('accept') || '';
+        if (!accept) return '点击选择或拖拽文件';
+        var exts = accept.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+        return '支持 ' + exts.slice(0, 5).join(' / ') + (exts.length > 5 ? ' 等' : '');
+      }
+
+      function acceptOk(input, file) {
+        var accept = (input.getAttribute('accept') || '').split(',').map(function(s) { return s.trim().toLowerCase(); }).filter(Boolean);
+        if (!accept.length) return true;
+        var name = (file.name || '').toLowerCase();
+        return accept.some(function(a) { return name.endsWith(a); });
+      }
+
+      function renderList(input, listEl) {
+        var files = Array.from(input.files || []);
+        listEl.innerHTML = files.map(function(f, i) {
+          return '<li class="ant-upload-list-item">' +
+            '<i class="fa fa-file-text-o ant-upload-list-icon"></i>' +
+            '<span class="ant-upload-list-item-name" title="' + escapeHtml(f.name) + '">' + escapeHtml(f.name) + '</span>' +
+            '<span class="ant-upload-list-item-size">' + formatSize(f.size) + '</span>' +
+            '<button type="button" class="ant-upload-list-item-remove" data-idx="' + i + '" title="移除"><i class="fa fa-times"></i></button>' +
+            '</li>';
+        }).join('');
+        listEl.querySelectorAll('.ant-upload-list-item-remove').forEach(function(btn) {
+          btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            var idx = parseInt(this.getAttribute('data-idx'), 10);
+            var dt = new DataTransfer();
+            Array.from(input.files || []).forEach(function(f, i) { if (i !== idx) dt.items.add(f); });
+            input.files = dt.files;
+            input.dispatchEvent(new Event('change', { bubbles: true }));
+          });
+        });
+      }
+
+      function antify(input) {
+        if (input.getAttribute('data-antified') === '1') return;
+        input.setAttribute('data-antified', '1');
+
+        var multiple = input.multiple;
+        var wrapper = document.createElement('div');
+        wrapper.className = 'ant-upload-wrapper';
+
+        var drag = document.createElement('div');
+        drag.className = 'ant-upload-drag';
+        drag.setAttribute('tabindex', '0');
+        drag.innerHTML =
+          '<i class="fa fa-cloud-upload ant-upload-icon"></i>' +
+          '<p class="ant-upload-text">点击或拖拽文件到此处' + (multiple ? '（可多选）' : '') + '</p>' +
+          '<p class="ant-upload-hint">' + escapeHtml(hintFromAccept(input)) + '</p>';
+
+        var list = document.createElement('ul');
+        list.className = 'ant-upload-list';
+
+        // 原 input 移入 wrapper 并隐藏（保留 id 与全部现有事件逻辑，files 属性照常可读）
+        input.parentNode.insertBefore(wrapper, input);
+        wrapper.appendChild(drag);
+        wrapper.appendChild(list);
+        wrapper.appendChild(input);
+        input.style.display = 'none';
+
+        drag.addEventListener('click', function() { input.click(); });
+        drag.addEventListener('keydown', function(e) {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); }
+        });
+
+        ['dragenter', 'dragover'].forEach(function(evt) {
+          drag.addEventListener(evt, function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            drag.classList.add('ant-upload-dragover');
+          });
+        });
+        ['dragleave', 'drop'].forEach(function(evt) {
+          drag.addEventListener(evt, function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            drag.classList.remove('ant-upload-dragover');
+          });
+        });
+        drag.addEventListener('drop', function(e) {
+          var files = e.dataTransfer && e.dataTransfer.files;
+          if (!files || !files.length) return;
+          var dt = new DataTransfer();
+          if (multiple) {
+            Array.prototype.forEach.call(files, function(f) {
+              if (acceptOk(input, f)) dt.items.add(f);
+            });
+          } else if (acceptOk(input, files[0])) {
+            dt.items.add(files[0]);
+          }
+          input.files = dt.files;
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+
+        input.addEventListener('change', function() { renderList(input, list); });
+        renderList(input, list);
+      }
+
+      window.initAntUploads = function(scope) {
+        (scope || document).querySelectorAll('input[type="file"]').forEach(antify);
+      };
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function() { window.initAntUploads(); });
+      } else {
+        window.initAntUploads();
+      }
+    })();
     </script>
 
     <!-- 引用外部 JavaScript 文件 -->

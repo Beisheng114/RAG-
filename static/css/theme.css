@@ -255,3 +255,111 @@ code {
 canvas {
   border-radius: var(--radius-card);
 }
+
+/* ============================================================
+   通用组件：antd 风格上传控件（纯 CSS/JS 实现，无 React 依赖）
+   视觉规范对齐 antd Upload Dragger，配色走主题令牌
+   ============================================================ */
+
+.ant-upload-wrapper {
+  display: block;
+  width: 100%;
+}
+
+.ant-upload-drag {
+  position: relative;
+  border: 1.5px dashed var(--color-border);
+  border-radius: var(--radius-input);
+  background: #fff;
+  padding: 18px 16px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color var(--transition-fast), background-color var(--transition-fast);
+  outline: none;
+}
+.ant-upload-drag:hover,
+.ant-upload-drag:focus-visible {
+  border-color: var(--color-accent);
+}
+.ant-upload-drag.ant-upload-dragover {
+  border-color: var(--color-accent);
+  background: var(--color-hover-bg);
+  box-shadow: inset 0 0 0 1px var(--color-accent);
+}
+.ant-upload-drag i.ant-upload-icon {
+  font-size: 1.9rem;
+  color: var(--color-accent);
+  display: block;
+  margin-bottom: 8px;
+  transition: transform var(--transition-hover);
+}
+.ant-upload-drag:hover i.ant-upload-icon {
+  transform: translateY(-2px);
+}
+.ant-upload-text {
+  font-size: 0.88rem;
+  color: var(--color-text-strong);
+  margin: 0 0 4px;
+}
+.ant-upload-hint {
+  font-size: 0.74rem;
+  color: var(--color-secondary);
+  margin: 0;
+}
+
+/* 文件列表（antd UploadList 风格） */
+.ant-upload-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ant-upload-list-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--color-text-nav);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 7px 10px;
+  background: #fff;
+  transition: all var(--transition-fast);
+}
+.ant-upload-list-item:hover {
+  border-color: var(--color-border-light);
+  background: var(--color-hover-bg);
+}
+.ant-upload-list-item i.ant-upload-list-icon {
+  color: var(--color-accent);
+  flex: none;
+}
+.ant-upload-list-item-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ant-upload-list-item-size {
+  flex: none;
+  color: var(--color-border);
+  font-size: 0.72rem;
+}
+.ant-upload-list-item-remove {
+  flex: none;
+  border: none;
+  background: transparent;
+  color: var(--color-secondary);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  transition: var(--transition-fast);
+}
+.ant-upload-list-item-remove:hover {
+  color: #e0245e;
+  background: #fee2e2;
+}
