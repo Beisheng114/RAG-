@@ -1,6 +1,6 @@
 import os
 from fastapi import APIRouter
-from fastapi.responses import RedirectResponse, FileResponse
+from fastapi.responses import RedirectResponse
 
 router = APIRouter(tags=["pages"])
 
@@ -9,16 +9,20 @@ INDEX_HTML_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(_
 
 @router.get("/")
 def root_index():
-    """根路由直接返回 SPA 单页面载体（index.html，默认启动页）。"""
+    """根路由重定向到 /static/index.html（SPA 单页面载体）。
+
+    注意：不能直接 FileResponse 返回 index.html——页面内全部静态资源
+    是相对路径引用（./css/...、libs/...、js/...），必须让页面 URL 位于
+    /static/ 之下，相对路径才能正确解析到 /static/css/... 等资源；
+    直接挂在根路径会解析为 /css/...（404）导致整站样式与脚本失效。
+    """
     if os.path.exists(INDEX_HTML_PATH):
-        return FileResponse(INDEX_HTML_PATH, media_type="text/html")
+        return RedirectResponse(url="/static/index.html")
     return RedirectResponse(url="/static/index.html")
 
 
 @router.get("/index.html")
 def index_html():
-    if os.path.exists(INDEX_HTML_PATH):
-        return FileResponse(INDEX_HTML_PATH, media_type="text/html")
     return RedirectResponse(url="/static/index.html")
 
 
