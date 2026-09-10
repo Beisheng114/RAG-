@@ -3390,6 +3390,14 @@ function displayNodeTypeCounts(counts) {
 
             const showEdgeLabels = kgEdgeLabelOn && kgNodes.length <= 300;
 
+            // 统计同一对节点间的边数（多条关系对称分离曲率，避免重合）
+            const pairTotal = {};
+            kgEdges.forEach(e => {
+                const key = e.from < e.to ? e.from + '\u0001' + e.to : e.to + '\u0001' + e.from;
+                pairTotal[key] = (pairTotal[key] || 0) + 1;
+            });
+            const pairSeq = {};
+
             chart.setOption({
                 backgroundColor: 'transparent',
                 tooltip: {
@@ -3423,12 +3431,39 @@ function displayNodeTypeCounts(counts) {
                         kgSystem: n.system_name || '',
                         kgDesc: kgExtractDesc(n.title)
                     })),
-                    links: kgEdges.map(e => ({
-                        source: e.from,
-                        target: e.to,
-                        value: e.label,
-                        label: { show: showEdgeLabels, formatter: p => p.data.value, fontSize: 10, color: '#4682B4' }
-                    })),
+                    links: kgEdges.map((e, i) => {
+                        // 同一对节点间的多条关系：对称展开曲率，避免连线与标签完全重合
+                        const pairKey = e.from < e.to ? e.from + '\u0001' + e.to : e.to + '\u0001' + e.from;
+                        const total = pairTotal[pairKey] || 1;
+                        const seq = pairSeq[pairKey] = (pairSeq[pairKey] || 0) + 1;
+                        let curveness;
+                        if (total === 1) {
+                            curveness = 0.15;
+                        } else {
+                            // 多边对称展开：±(0.12, 0.3, 0.48, ...)，奇数条时第 1 条走直线
+                            const step = 0.12 + (((seq - 1) >> 1)) * 0.18;
+                            curveness = total % 2 === 1 && seq === 1 ? 0 : (seq % 2 === 0 ? -step : step);
+                        }
+                        return {
+                            source: e.from,
+                            target: e.to,
+                            value: e.label,
+                            // 方向箭头（终点端），恢复关系 from→to 的方向语义
+                            symbol: ['none', 'arrow'],
+                            symbolSize: [0, 7],
+                            lineStyle: { curveness: curveness },
+                            label: {
+                                show: showEdgeLabels,
+                                position: 'middle',
+                                formatter: p => p.data.value,
+                                fontSize: 10,
+                                color: '#4682B4',
+                                backgroundColor: 'rgba(255, 255, 255, 0.85)',
+                                padding: [1, 3],
+                                borderRadius: 3
+                            }
+                        };
+                    }),
                     emphasis: {
                         focus: 'adjacency',
                         lineStyle: { width: 3 },
@@ -3443,7 +3478,7 @@ function displayNodeTypeCounts(counts) {
                     },
                     blurScope: 'coordinateSystem',
                     itemStyle: { borderColor: '#fff', borderWidth: 1 },
-                    lineStyle: { color: '#8fb3cf', width: 1.2, curveness: 0.15, opacity: 0.7 },
+                    lineStyle: { color: '#8fb3cf', width: 1.2, opacity: 0.7 },
                     label: { show: true, position: 'right', fontSize: 11, color: '#2c5a7a', formatter: p => kgTruncate(p.name, 12) },
                     labelLayout: { hideOverlap: true },
                     // 密集治理：缩放时节点不急剧膨胀（nodeScaleRatio），大图斥力自适应更疏散
