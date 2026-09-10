@@ -857,7 +857,7 @@
     <!-- 右侧图谱展示 -->
                     <div class="graph-area">
         <!-- 检索面板收起/展开把手（贴画布左缘） -->
-        <button id="kg-panel-toggle" class="kg-panel-toggle" title="收起检索面板">
+        <button id="kg-panel-toggle" class="kg-panel-toggle" data-tip="收起检索面板">
             <i class="fa fa-chevron-left"></i>
         </button>
         <div class="graph-card">
@@ -868,16 +868,16 @@
             </div>
             <!-- 画布工具栏 -->
             <div id="graph-toolbar" class="kg-toolbar hidden">
-                <button id="kg-btn-relayout" class="kg-tool-btn" title="重新布局"><i class="fa fa-refresh"></i></button>
-                <button id="kg-btn-fit" class="kg-tool-btn" title="适配视野"><i class="fa fa-arrows-alt"></i></button>
-                <button id="kg-btn-edgelabel" class="kg-tool-btn" title="显示/隐藏关系标签"><i class="fa fa-tag"></i></button>
-                <button id="kg-btn-export" class="kg-tool-btn" title="导出 PNG"><i class="fa fa-download"></i></button>
+                <button id="kg-btn-relayout" class="kg-tool-btn" data-tip="重新布局（重排节点位置）"><i class="fa fa-refresh"></i></button>
+                <button id="kg-btn-fit" class="kg-tool-btn" data-tip="适配视野（缩放复位）"><i class="fa fa-arrows-alt"></i></button>
+                <button id="kg-btn-edgelabel" class="kg-tool-btn" data-tip="显示 / 隐藏关系标签"><i class="fa fa-tag"></i></button>
+                <button id="kg-btn-export" class="kg-tool-btn" data-tip="导出为 PNG 图片"><i class="fa fa-download"></i></button>
             </div>
             <!-- 节点详情侧栏 -->
             <aside id="node-detail-panel" class="kg-detail-panel hidden">
                 <div class="kg-detail-header">
                     <span id="kg-detail-type" class="kg-type-badge"></span>
-                    <button id="kg-detail-close" class="kg-detail-close" title="关闭"><i class="fa fa-times"></i></button>
+                    <button id="kg-detail-close" class="kg-detail-close" data-tip="关闭详情"><i class="fa fa-times"></i></button>
                 </div>
                 <h3 id="kg-detail-name" class="kg-detail-name"></h3>
                 <div id="kg-detail-meta" class="kg-detail-meta"></div>
@@ -3495,6 +3495,12 @@ function displayNodeTypeCounts(counts) {
             // 全量渲染（查询/追加/重布局）后布局坐标已变化，聚焦状态失效
             kgFocusedNodeId = null;
             document.getElementById('graph-toolbar').classList.remove('hidden');
+            // 大图（>300节点）强制隐藏边标签时，同步按钮熄灭与提示文案
+            const edgelabelBtn = document.getElementById('kg-btn-edgelabel');
+            if (edgelabelBtn) {
+                edgelabelBtn.classList.toggle('active', showEdgeLabels);
+                edgelabelBtn.setAttribute('data-tip', showEdgeLabels ? '隐藏关系标签（当前：显示中）' : (kgNodes.length > 300 ? '节点过多，关系标签已自动隐藏' : '显示关系标签'));
+            }
         }
 
         // 渲染图谱（append=true 时按节点 id / 边键去重合并）
@@ -3737,7 +3743,7 @@ function displayNodeTypeCounts(counts) {
             const toggle = document.getElementById('kg-panel-toggle');
             if (!panel || !toggle) return;
             panel.classList.toggle('collapsed', collapsed);
-            toggle.title = collapsed ? '展开检索面板' : '收起检索面板';
+            toggle.setAttribute('data-tip', collapsed ? '展开检索面板' : '收起检索面板');
             toggle.querySelector('i').className = collapsed ? 'fa fa-chevron-right' : 'fa fa-chevron-left';
             try { sessionStorage.setItem('kgPanelCollapsed', collapsed ? '1' : '0'); } catch (e) {}
             // 面板宽度过渡（250ms）结束后同步画布尺寸，避免 ECharts 容器错位
@@ -3762,6 +3768,12 @@ function displayNodeTypeCounts(counts) {
         function kgToggleEdgeLabels() {
             kgEdgeLabelOn = !kgEdgeLabelOn;
             if (kgChart) kgApplyOption();
+            // 按钮激活态与提示文案同步（标签开启时按钮保持高亮）
+            const btn = document.getElementById('kg-btn-edgelabel');
+            if (btn) {
+                btn.classList.toggle('active', kgEdgeLabelOn);
+                btn.setAttribute('data-tip', kgEdgeLabelOn ? '隐藏关系标签（当前：显示中）' : '显示关系标签');
+            }
             kgShowToast(kgEdgeLabelOn ? '已显示关系标签' : '已隐藏关系标签', 'info');
         }
         function kgExportPng() {
