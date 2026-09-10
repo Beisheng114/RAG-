@@ -105,140 +105,154 @@
 }
 
 /* ============================================================
-   Tailwind 主题覆盖层（合并自三份补丁，全部引用令牌）
-   说明：内嵌视图（extract/kgadmin/config）大量使用 Tailwind
-   utility，本层将默认灰色系统一映射到浅蓝海主题。
+   Tailwind 主题覆盖层（仅作用于三个内嵌视图）
+   —— 图谱提取 #extract-view / 知识库管理 #kgadmin-view / 系统配置 #config-view
+   合并自原三份补丁；值回归原加载顺序（extract.css 最后加载）下的实际生效值。
+   注意：不再全局生效，避免污染主界面（侧边栏/对话/图谱视图等）
+   的 Tailwind slate 文字与组件配色——主界面主题由 css/index.css 负责。
    ============================================================ */
 
 /* --- 页面/卡片底色 --- */
-.bg-slate-50, .bg-slate-100, .bg-gray-50 {
+#extract-view .bg-slate-50, #kgadmin-view .bg-slate-50, #config-view .bg-slate-50,
+#extract-view .bg-slate-100, #kgadmin-view .bg-slate-100, #config-view .bg-slate-100,
+#extract-view .bg-gray-50, #kgadmin-view .bg-gray-50, #config-view .bg-gray-50 {
   background-color: var(--color-page-bg) !important;
 }
-.bg-white {
+#extract-view .bg-white, #kgadmin-view .bg-white, #config-view .bg-white {
   background-color: #ffffff !important;
   border: 1px solid var(--color-border) !important;
   box-shadow: var(--shadow-card);
   transition: box-shadow var(--transition-fast), border-color var(--transition-fast);
 }
-.bg-white:hover {
+#extract-view .bg-white:hover, #kgadmin-view .bg-white:hover, #config-view .bg-white:hover {
   border-color: var(--color-border-light) !important;
   box-shadow: var(--shadow-card-hover);
 }
-.bg-slate-900 {
-  background-color: #0f2540 !important;
+#extract-view .bg-slate-900, #kgadmin-view .bg-slate-900, #config-view .bg-slate-900 {
+  background-color: #0f172a !important;
+  border: 1px solid var(--color-secondary);
 }
 
 /* --- 主按钮 --- */
-.bg-blue-600 {
+#extract-view .bg-blue-600, #kgadmin-view .bg-blue-600, #config-view .bg-blue-600 {
   background-color: var(--color-accent) !important;
   transition: all var(--transition-fast);
 }
-.bg-blue-600:hover {
+#extract-view .bg-blue-600:hover, #kgadmin-view .bg-blue-600:hover, #config-view .bg-blue-600:hover {
   background-color: var(--color-accent-soft) !important;
   transform: translateY(-1px);
 }
-.hover\:bg-blue-50:hover {
+#extract-view .hover\:bg-blue-50:hover, #kgadmin-view .hover\:bg-blue-50:hover, #config-view .hover\:bg-blue-50:hover {
   background-color: var(--color-hover-bg) !important;
 }
 
 /* --- 次级/危险按钮 --- */
-.bg-slate-700 {
+#extract-view .bg-slate-700, #kgadmin-view .bg-slate-700, #config-view .bg-slate-700 {
   background-color: var(--color-secondary) !important;
   transition: all var(--transition-fast);
 }
-.bg-slate-700:hover {
+#extract-view .bg-slate-700:hover, #kgadmin-view .bg-slate-700:hover, #config-view .bg-slate-700:hover {
   background-color: #5F9EA0 !important;
 }
-.bg-slate-600 {
+#extract-view .bg-slate-600, #kgadmin-view .bg-slate-600, #config-view .bg-slate-600 {
   background-color: var(--color-secondary) !important;
   transition: all var(--transition-fast);
 }
-.bg-slate-600:hover {
+#extract-view .bg-slate-600:hover, #kgadmin-view .bg-slate-600:hover, #config-view .bg-slate-600:hover {
   background-color: var(--color-accent-soft) !important;
 }
-.bg-slate-200 {
+#extract-view .bg-slate-200, #kgadmin-view .bg-slate-200, #config-view .bg-slate-200 {
   background-color: var(--color-chip-bg) !important;
   transition: all var(--transition-fast);
 }
-.bg-slate-200:hover {
+#extract-view .bg-slate-200:hover, #kgadmin-view .bg-slate-200:hover, #config-view .bg-slate-200:hover {
   background-color: var(--color-border-light) !important;
 }
-.bg-emerald-600 {
+#extract-view .bg-emerald-600, #kgadmin-view .bg-emerald-600, #config-view .bg-emerald-600 {
   background-color: #0e9f6e !important;
   transition: all var(--transition-fast);
 }
-.bg-emerald-600:hover {
+#extract-view .bg-emerald-600:hover, #kgadmin-view .bg-emerald-600:hover, #config-view .bg-emerald-600:hover {
   background-color: #14b8a6 !important;
 }
-.bg-rose-600 {
+#extract-view .bg-rose-600, #kgadmin-view .bg-rose-600, #config-view .bg-rose-600 {
   background-color: #e0245e !important;
   transition: all var(--transition-fast);
 }
-.bg-rose-600:hover {
+#extract-view .bg-rose-600:hover, #kgadmin-view .bg-rose-600:hover, #config-view .bg-rose-600:hover {
   background-color: #f43f5e !important;
 }
 
-/* --- 文字颜色 --- */
-.text-blue-700, .text-blue-600 {
+/* --- 文字颜色（回归原 extract.css 生效值：中性深灰蓝） --- */
+#extract-view .text-blue-700, #kgadmin-view .text-blue-700, #config-view .text-blue-700,
+#extract-view .text-blue-600, #kgadmin-view .text-blue-600, #config-view .text-blue-600 {
   color: var(--color-accent) !important;
 }
-.text-slate-500, .text-slate-600, .text-slate-700 {
-  color: var(--color-secondary) !important;
+#extract-view .text-slate-500, #kgadmin-view .text-slate-500, #config-view .text-slate-500,
+#extract-view .text-slate-600, #kgadmin-view .text-slate-600, #config-view .text-slate-600,
+#extract-view .text-slate-700, #kgadmin-view .text-slate-700, #config-view .text-slate-700,
+#extract-view .text-slate-800, #kgadmin-view .text-slate-800, #config-view .text-slate-800 {
+  color: #2c3e4e !important;
 }
-.text-slate-800 {
-  color: var(--color-text-strong) !important;
+#extract-view .text-slate-100, #kgadmin-view .text-slate-100, #config-view .text-slate-100 {
+  color: #E0FFFF !important;
 }
-.text-slate-100 {
-  color: #dce8f5 !important;
-}
-.text-green-600 {
+#extract-view .text-green-600, #kgadmin-view .text-green-600, #config-view .text-green-600 {
   color: #0e9f6e !important;
 }
-.text-amber-600 {
+#extract-view .text-amber-600, #kgadmin-view .text-amber-600, #config-view .text-amber-600 {
   color: #d97706 !important;
 }
 
 /* --- 边框 --- */
-.border, .border-slate-200, .border-gray-200 {
+#extract-view .border, #kgadmin-view .border, #config-view .border,
+#extract-view .border-slate-200, #kgadmin-view .border-slate-200, #config-view .border-slate-200,
+#extract-view .border-gray-200, #kgadmin-view .border-gray-200, #config-view .border-gray-200 {
   border-color: var(--color-border) !important;
 }
 
 /* --- 表单控件 --- */
-input, select, .border {
+#extract-view input, #kgadmin-view input, #config-view input,
+#extract-view select, #kgadmin-view select, #config-view select,
+#extract-view .border, #kgadmin-view .border, #config-view .border {
   border-color: var(--color-border) !important;
   border-radius: var(--radius-input);
   transition: var(--transition-fast);
 }
-input:focus, select:focus {
+#extract-view input:focus, #kgadmin-view input:focus, #config-view input:focus,
+#extract-view select:focus, #kgadmin-view select:focus, #config-view select:focus {
   border-color: var(--color-accent) !important;
   box-shadow: 0 0 0 3px rgba(30, 144, 255, 0.12);
   outline: none;
 }
-button {
+#extract-view button, #kgadmin-view button, #config-view button {
   border-radius: var(--radius-btn);
 }
-button:disabled {
+#extract-view button:disabled, #kgadmin-view button:disabled, #config-view button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
-/* --- 标题 / 分隔线 / 图标 --- */
-h2, h3, .font-semibold {
+/* --- 标题 / 分隔线 / 图标 / 链接 --- */
+#extract-view h2, #kgadmin-view h2, #config-view h2,
+#extract-view h3, #kgadmin-view h3, #config-view h3,
+#extract-view .font-semibold, #kgadmin-view .font-semibold, #config-view .font-semibold {
   color: var(--color-text-strong) !important;
 }
-hr {
+#extract-view hr, #kgadmin-view hr, #config-view hr {
   border-color: var(--color-border) !important;
 }
-i, .fa {
+#extract-view i, #kgadmin-view i, #config-view i,
+#extract-view .fa, #kgadmin-view .fa, #config-view .fa {
   color: var(--color-accent);
 }
-a {
+#extract-view a, #kgadmin-view a, #config-view a {
   color: var(--color-link);
 }
-a:hover {
+#extract-view a:hover, #kgadmin-view a:hover, #config-view a:hover {
   color: var(--color-accent);
 }
-code {
+#extract-view code, #kgadmin-view code, #config-view code {
   background-color: var(--color-hover-bg) !important;
   color: var(--color-text-active) !important;
   border-radius: 6px;
@@ -246,14 +260,24 @@ code {
 }
 
 /* --- 组件级 --- */
-.rounded-2xl {
+#extract-view .rounded-2xl, #kgadmin-view .rounded-2xl, #config-view .rounded-2xl {
   border-radius: var(--radius-card) !important;
 }
-.shadow-sm {
+#extract-view .shadow-sm, #kgadmin-view .shadow-sm, #config-view .shadow-sm {
   box-shadow: var(--shadow-card) !important;
 }
-canvas {
+#extract-view canvas, #kgadmin-view canvas, #config-view canvas {
   border-radius: var(--radius-card);
+}
+#kgadmin-view canvas {
+  max-height: 100%;
+}
+
+/* --- 图谱提取视图：日志输出框 --- */
+#log-output {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.75rem;
+  line-height: 1.5;
 }
 
 /* ============================================================

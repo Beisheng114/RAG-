@@ -785,12 +785,28 @@
             margin-right: 2px;
         }
 
-        /* 导航菜单容器 */
+        /* 导航菜单容器（flex: 0 1 auto——不抢占对话列表的弹性空间；
+           屏幕过矮时菜单自身收缩滚动，保证底部按钮区始终可见） */
         .nav-menu {
             padding: 0.75rem 0.75rem;
             display: flex;
             flex-direction: column;
             gap: 0.5rem;
+            flex: 0 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: var(--color-border-light) transparent;
+        }
+        .nav-menu::-webkit-scrollbar {
+            width: 4px;
+        }
+        .nav-menu::-webkit-scrollbar-thumb {
+            background: var(--color-border-light);
+            border-radius: 4px;
+        }
+        .nav-menu::-webkit-scrollbar-track {
+            background: transparent;
         }
         .nav-item {
             display: flex;
@@ -2944,3 +2960,12 @@
             background: #3c9eff;
             border-radius: 10px;
         }
+/* ============================================================
+   主界面底色主题化（替代原全局补丁对灰色底类的覆盖）
+   特异性 .app-layout .bg-gray-50 (0-2-0) 压过 Tailwind 运行时注入 (0-1-0)
+   ============================================================ */
+.app-layout .bg-gray-50,
+.app-layout .bg-slate-50,
+.app-layout .bg-slate-100 {
+    background-color: var(--color-page-bg);
+}
