@@ -12,12 +12,27 @@ MAX_UPLOAD_FILE_SIZE = 8 * 1024 * 1024  # 8MB
 ALLOWED_UPLOAD_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".pdf"}
 
 
-def query_graph_data(query: str, entity_type: str, node_limit: int, system_name: str) -> Dict[str, Any]:
+def query_graph_data(query: str, entity_type: str, node_limit: int, system_name: str, offset: int = 0) -> Dict[str, Any]:
     rag_system = get_rag_system()
     if not rag_system:
         return {"success": False, "message": "RAG系统未初始化", "nodes": [], "edges": [], "stats": None}
 
-    nodes, edges, stats = rag_system.query_graph(query, entity_type, node_limit, system_name)
+    nodes, edges, stats = rag_system.query_graph(query, entity_type, node_limit, system_name, offset)
+    return {
+        "success": True,
+        "nodes": nodes,
+        "edges": edges,
+        "stats": stats,
+        "message": None,
+    }
+
+
+def get_node_neighbors_data(node_id: int, limit: int = 20) -> Dict[str, Any]:
+    rag_system = get_rag_system()
+    if not rag_system:
+        return {"success": False, "message": "RAG系统未初始化", "nodes": [], "edges": [], "stats": None}
+
+    nodes, edges, stats = rag_system.get_node_neighbors(node_id, limit)
     return {
         "success": True,
         "nodes": nodes,

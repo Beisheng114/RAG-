@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from services.graph_service import (
     query_graph_data,
+    get_node_neighbors_data,
     get_node_counts_data,
     preview_material_data,
     import_material_with_parsed_data,
@@ -20,6 +21,7 @@ class GraphQueryRequest(BaseModel):
     entity_type: str = "all"
     node_limit: int = 200
     system_name: Optional[str] = "all"
+    offset: int = 0
 
 
 class GraphNode(BaseModel):
@@ -59,7 +61,13 @@ class MaterialImportResponse(BaseModel):
 @router.post("/graph/query", response_model=GraphQueryResponse)
 def query_graph(request: GraphQueryRequest):
     try:
-        data = query_graph_data(request.query, request.entity_type, request.node_limit, request.system_name or "all")
+        data = query_graph_data(
+            request.query,
+            request.entity_type,
+            request.node_limit,
+            request.system_name or "all",
+            max(int(request.offset or 0), 0),
+        )
         if not data["success"]:
             return GraphQueryResponse(success=False, nodes=[], edges=[], stats=None, message=data.get("message"))
 
@@ -90,6 +98,33 @@ def get_node_counts():
         return NodeCountsResponse(success=data["success"], counts=data.get("counts"), message=data.get("message"))
     except Exception as e:
         return NodeCountsResponse(success=False, message=str(e))
+
+
+@router.get("/graph/node/{node_id}/neighbors", response_model=GraphQueryResponse)
+def get_node_neighbors(node_id: int, limit: int = 20):
+    """获取指定节点的一度邻居子图（图谱「展开邻居」交互）"""
+    try:
+        data = get_node_neighbors_data(node_id, limit)
+        if not data["success"]:
+            return GraphQueryResponse(success=False, nodes=[], edges=[], stats=None, message=data.get("message"))
+
+        graph_nodes = [
+            GraphNode(
+                id=node["id"],
+                label=node["label"],
+                type=node["type"],
+                title=node.get("title"),
+                system_name=node.get("system_name"),
+            )
+            for node in data.get("nodes", [])
+        ]
+        graph_edges = [
+            GraphEdge(from_id=edge["from"], to_id=edge["to"], label=edge["label"])
+            for edge in data.get("edges", [])
+        ]
+        return GraphQueryResponse(success=True, nodes=graph_nodes, edges=graph_edges, stats=data.get("stats"))
+    except Exception as e:
+        return GraphQueryResponse(success=False, nodes=[], edges=[], stats=None, message=str(e))
 
 
 @router.post("/material/preview", response_model=MaterialImportResponse)

@@ -646,7 +646,55 @@ class AdvancedGraphRAGSystem:
         if self.index_module:
             self.index_module.close()
 
-    def query_graph(self, query: str, entity_type: str = "all", node_limit: int = 200, system_name: str = "all"):
+    def _node_to_item(self, n) -> dict:
+        """将 Neo4j 节点转换为前端图谱节点结构（query_graph 与 get_node_neighbors 共用）"""
+        n_id = n.id
+        node_type = list(n.labels)[0] if n.labels else "Unknown"
+        if node_type == "FaultReason":
+            label = n.get("cause_name") or str(n_id)
+        elif node_type in ("MaintenanceAction", "FaultPhenomenon", "SafetyNotice"):
+            label = n.get("description") or str(n_id)
+        else:
+            label = n.get("name") or str(n_id)
+        extra = n.get("description") or n.get("cause_name") or ""
+        node_system = n.get("system_name")
+        title_lines = [f"{label} ({node_type})"]
+        if node_system:
+            title_lines.append(f"所属系统: {node_system}")
+        if extra and extra != label:
+            title_lines.append(f"描述: {extra[:300]}")
+        title = "\n".join(title_lines)
+        return {
+            "id": str(n_id),
+            "label": label,
+            "type": node_type,
+            "title": title,
+            "system_name": node_system,
+        }
+
+    def _ingest_triplet(self, n, m, r, nodes: List[dict], edges: List[dict],
+                        seen_nodes: Set[int], seen_edges: Set[Tuple[int, int, str]]) -> None:
+        """将一条 (n)-[r]-(m) 三元组合入结果集（按 id / 无向边去重，共用逻辑）"""
+        # 强制使用关系真实方向，避免无向 MATCH 导致前端看起来“双向箭头”
+        start_n = r.start_node
+        end_n = r.end_node
+        n_id, m_id = start_n.id, end_n.id
+
+        if n_id not in seen_nodes:
+            seen_nodes.add(n_id)
+            nodes.append(self._node_to_item(start_n))
+        if m_id not in seen_nodes:
+            seen_nodes.add(m_id)
+            nodes.append(self._node_to_item(end_n))
+
+        # 关系去重（无向可视化去重）：将 A->B 与 B->A 视为同一条边
+        edge_key = (min(n_id, m_id), max(n_id, m_id), r.type)
+        if edge_key not in seen_edges:
+            seen_edges.add(edge_key)
+            # 保留首次出现方向用于展示
+            edges.append({"from": str(n_id), "to": str(m_id), "label": r.type})
+
+    def query_graph(self, query: str, entity_type: str = "all", node_limit: int = 200, system_name: str = "all", offset: int = 0):
         """
         查询知识图谱
         
@@ -667,64 +715,15 @@ class AdvancedGraphRAGSystem:
             stats = {}
 
             node_limit = min(max(int(node_limit), 50), 500)
+            offset = max(int(offset), 0)
             depth = min(max(int(getattr(self.config, "max_graph_depth", 4)), 1), 8)
             anchor_lim = min(25, max(5, node_limit // 20))
             path_lim = min(200, max(40, node_limit))
             # 浏览模式：按「边」采样，保证每条边两端节点成对出现（修复原先节点/边两次独立 LIMIT 导致的不连通）
             browse_edge_lim = min(4000, max(200, node_limit * 5))
 
-            def node_to_item(n) -> dict:
-                n_id = n.id
-                node_type = list(n.labels)[0] if n.labels else "Unknown"
-                if node_type == "FaultReason":
-                    label = n.get("cause_name") or str(n_id)
-                elif node_type in ("MaintenanceAction", "FaultPhenomenon", "SafetyNotice"):
-                    label = n.get("description") or str(n_id)
-                elif node_type == "Fault":
-                    label = n.get("name") or str(n_id)
-                else:
-                    label = n.get("name") or str(n_id)
-                extra = n.get("description") or n.get("cause_name") or ""
-                node_system = n.get("system_name")
-                title_lines = [f"{label} ({node_type})"]
-                if node_system:
-                    title_lines.append(f"所属系统: {node_system}")
-                if extra and extra != label:
-                    title_lines.append(f"描述: {extra[:300]}")
-                title = "\n".join(title_lines)
-                return {
-                    "id": str(n_id),
-                    "label": label,
-                    "type": node_type,
-                    "title": title,
-                    "system_name": node_system,
-                }
-
-            def ingest_triplet(
-                n,
-                m,
-                r,
-                seen_nodes: Set[int],
-                seen_edges: Set[Tuple[int, int, str]],
-            ) -> None:
-                # 强制使用关系真实方向，避免无向 MATCH 导致前端看起来“双向箭头”
-                start_n = r.start_node
-                end_n = r.end_node
-                n_id, m_id = start_n.id, end_n.id
-
-                if n_id not in seen_nodes:
-                    seen_nodes.add(n_id)
-                    nodes.append(node_to_item(start_n))
-                if m_id not in seen_nodes:
-                    seen_nodes.add(m_id)
-                    nodes.append(node_to_item(end_n))
-
-                # 关系去重（无向可视化去重）：将 A->B 与 B->A 视为同一条边，避免前端出现双向重复连线
-                edge_key = (min(n_id, m_id), max(n_id, m_id), r.type)
-                if edge_key not in seen_edges:
-                    seen_edges.add(edge_key)
-                    # 保留首次出现方向用于展示
-                    edges.append({"from": str(n_id), "to": str(m_id), "label": r.type})
+            # 记录浏览模式消费的原始三元组数量，用于判定 has_more（分页）
+            consumed_records = 0
 
             system_name = (system_name or "all").strip()
             sys_lower = system_name.lower()
@@ -740,12 +739,14 @@ class AdvancedGraphRAGSystem:
                     MATCH p = (e)-[*1..2]-(x)
                     UNWIND relationships(p) AS rel
                     RETURN startNode(rel) AS n, rel AS r, endNode(rel) AS m
+                    SKIP $offset
                     LIMIT $lim
                     """
                 elif entity_type == "all":
                     browse_cypher = """
                     MATCH (n)-[r]-(m)
                     WITH n, r, m
+                    SKIP $offset
                     LIMIT $lim
                     RETURN n, r, m
                     """
@@ -754,6 +755,7 @@ class AdvancedGraphRAGSystem:
                     MATCH (n)-[r]-(m)
                     WHERE $etype IN labels(n) OR $etype IN labels(m)
                     WITH n, r, m
+                    SKIP $offset
                     LIMIT $lim
                     RETURN n, r, m
                     """
@@ -764,13 +766,15 @@ class AdvancedGraphRAGSystem:
                         browse_cypher,
                         {
                             "lim": browse_edge_lim,
+                            "offset": offset,
                             "etype": entity_type,
                             "sys": system_name,
                             "anchor_lim": anchor_lim,
                         },
                     )
                     for record in result:
-                        ingest_triplet(record["n"], record["m"], record["r"], seen_nodes, seen_edges)
+                        consumed_records += 1
+                        self._ingest_triplet(record["n"], record["m"], record["r"], nodes, edges, seen_nodes, seen_edges)
             else:
                 q = query.strip()
                 # 优先走全文索引召回 anchor，避免大范围 CONTAINS + OR 扫描
@@ -846,12 +850,14 @@ class AdvancedGraphRAGSystem:
                     except Exception:
                         records = list(session.run(legacy_contains_cypher, params))
                     for record in records:
-                        ingest_triplet(record["n"], record["m"], record["r"], seen_nodes, seen_edges)
+                        self._ingest_triplet(record["n"], record["m"], record["r"], nodes, edges, seen_nodes, seen_edges)
 
             # 统计信息
             stats["total_nodes"] = len(nodes)
             stats["total_edges"] = len(edges)
-            
+            # 分页提示：浏览模式消费满一页原始三元组时，可能还有下一页
+            stats["has_more"] = (not query or query.strip() == "") and consumed_records >= browse_edge_lim and len(edges) > 0
+
             # 按类型统计节点
             node_types = {}
             for node in nodes:
@@ -860,14 +866,58 @@ class AdvancedGraphRAGSystem:
                     node_types[node_type] = 0
                 node_types[node_type] += 1
             stats["node_types"] = node_types
-            
+
             return nodes, edges, stats
         except Exception as e:
             logger.error(f"图谱查询失败: {e}")
             import traceback
             traceback.print_exc()
             return [], [], {}
-    
+
+    def get_node_neighbors(self, node_id: int, limit: int = 20):
+        """
+        获取指定节点的一度邻居子图（用于图谱「展开邻居」交互）
+
+        Args:
+            node_id: Neo4j 节点内部 id
+            limit: 返回的关系数量上限（1~100，默认20）
+
+        Returns:
+            (nodes, edges, stats) 元组；nodes[0] 为锚点节点本身
+        """
+        try:
+            driver = self.data_module.driver
+            lim = min(max(int(limit), 1), 100)
+            nid = int(node_id)
+
+            nodes: List[dict] = []
+            edges: List[dict] = []
+            seen_nodes: Set[int] = set()
+            seen_edges: Set[Tuple[int, int, str]] = set()
+
+            cypher = """
+            MATCH (n)-[r]-(m)
+            WHERE id(n) = $nid
+            RETURN n, r, m
+            LIMIT $lim
+            """
+            with driver.session() as session:
+                result = session.run(cypher, {"nid": nid, "lim": lim})
+                for record in result:
+                    self._ingest_triplet(record["n"], record["m"], record["r"], nodes, edges, seen_nodes, seen_edges)
+
+            stats = {
+                "total_nodes": len(nodes),
+                "total_edges": len(edges),
+                "anchor_id": str(nid),
+            }
+            return nodes, edges, stats
+        except Exception as e:
+            logger.error(f"获取节点邻居失败: {e}")
+            import traceback
+            traceback.print_exc()
+            return [], [], {}
+
     def get_node_type_counts(self):
         """
         获取各类节点的总数
