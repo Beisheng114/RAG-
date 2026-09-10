@@ -3336,11 +3336,15 @@ function displayNodeTypeCounts(counts) {
             const ph = container.querySelector('.graph-placeholder');
             if (ph) ph.remove();
             kgChart = echarts.init(container);
-            // 单击：详情侧栏；双击：展开邻居
+            // 单击：聚焦对应关系 + 详情侧栏；点空白：退出聚焦；双击：展开邻居
             kgChart.on('click', function(params) {
                 if (params.dataType === 'node') {
                     const raw = kgNodes.find(n => n.id === params.data.id);
                     if (raw) showNodeDetail(raw);
+                    focusNodeRelations(params.data.id);
+                } else if (!params.dataType) {
+                    // 点击画布空白区域：退出聚焦
+                    clearFocus(true);
                 }
             });
             kgChart.on('dblclick', function(params) {
@@ -3426,15 +3430,19 @@ function displayNodeTypeCounts(counts) {
                     lineStyle: { color: '#8fb3cf', width: 1.2, curveness: 0.15, opacity: 0.7 },
                     label: { show: true, position: 'right', fontSize: 11, color: '#2c5a7a', formatter: p => kgTruncate(p.name, 12) },
                     labelLayout: { hideOverlap: true },
+                    // 密集治理：缩放时节点不急剧膨胀（nodeScaleRatio），大图斥力自适应更疏散
+                    nodeScaleRatio: 0.2,
                     force: {
-                        repulsion: 180,
-                        edgeLength: [50, 120],
+                        repulsion: kgNodes.length > 300 ? 90 : 180,
+                        edgeLength: [60, 130],
                         gravity: 0.1,
                         layoutAnimation: kgNodes.length <= 500
                     }
                 }]
             }, { notMerge: true });
 
+            // 全量渲染（查询/追加/重布局）后布局坐标已变化，聚焦状态失效
+            kgFocusedNodeId = null;
             document.getElementById('graph-toolbar').classList.remove('hidden');
         }
 
@@ -3584,12 +3592,12 @@ function displayNodeTypeCounts(counts) {
                     <span class="kg-rel-arrow">${r.outgoing ? '→' : '←'}</span>
                     <span class="kg-rel-node">${escapeHtml(kgTruncate(r.otherName, 14))}</span>
                 </li>`).join('') || '<li class="kg-rel-empty">暂无关联关系</li>';
-            // 点击关联项：高亮对端节点并展示其详情
+            // 点击关联项：聚焦对端节点的对应关系并展示其详情
             ul.querySelectorAll('li[data-node-id]').forEach(li => {
                 li.addEventListener('click', function() {
                     const target = kgNodes.find(n => n.id === this.dataset.nodeId);
                     if (target) {
-                        focusNode(target.id);
+                        focusNodeRelations(target.id);
                         showNodeDetail(target);
                     }
                 });
@@ -3600,12 +3608,53 @@ function displayNodeTypeCounts(counts) {
             panel.classList.add('slide-in-right');
         }
 
-        // 高亮指定节点（邻接高亮）
+        // ---- 聚焦模式 ----
+        // 点击节点后：视口定位到该节点（放大）+ 持久邻接高亮（一跳邻居亮、其余淡化）
+        let kgFocusedNodeId = null;
+
+        // 读取 force 布局收敛后的节点坐标（数据坐标系）
+        function kgNodeLayout(nodeId) {
+            try {
+                const seriesModel = kgChart.getModel().getSeriesByIndex(0);
+                const node = seriesModel && seriesModel.getGraph().getNodeById(String(nodeId));
+                const layout = node && node.getLayout();
+                if (layout && isFinite(layout[0]) && isFinite(layout[1])) return layout;
+            } catch (e) { /* 内部 API 兜底：布局未完成时忽略 */ }
+            return null;
+        }
+
         function focusNode(nodeId) {
             if (!kgChart) return;
             const idx = kgNodes.findIndex(n => n.id === nodeId);
             if (idx < 0) return;
             kgChart.dispatchAction({ type: 'highlight', seriesIndex: 0, dataIndex: idx });
+        }
+
+        // 聚焦指定节点的对应关系（视口 + 高亮双重）
+        function focusNodeRelations(nodeId) {
+            if (!kgChart) return;
+            const idx = kgNodes.findIndex(n => n.id === nodeId);
+            if (idx < 0) return;
+            kgFocusedNodeId = nodeId;
+            // 持久邻接高亮：emphasis.focus=adjacency 使一跳邻居保持亮、非关联淡化
+            kgChart.dispatchAction({ type: 'highlight', seriesIndex: 0, dataIndex: idx });
+            // 视口定位到该节点（局部 setOption 只改 center/zoom，不触发 force 重布局）
+            const layout = kgNodeLayout(nodeId);
+            if (layout) {
+                kgChart.setOption({ series: [{ id: 'kg', zoom: 1.8, center: [layout[0], layout[1]] }] });
+            }
+            const node = kgNodes[idx];
+            kgShowToast(`已聚焦「${kgTruncate(node.label, 10)}」的对应关系，点击空白处退出`, 'info');
+        }
+
+        // 退出聚焦：取消高亮 + 视口复位
+        function clearFocus(silent) {
+            if (!kgChart) return;
+            if (kgFocusedNodeId == null) return;
+            kgChart.dispatchAction({ type: 'downplay', seriesIndex: 0 });
+            kgChart.setOption({ series: [{ id: 'kg', zoom: 1, center: ['50%', '50%'] }] });
+            kgFocusedNodeId = null;
+            if (!silent) kgShowToast('已退出聚焦', 'info');
         }
 
         // 双击展开邻居（增量拉取一度邻居并入图）
@@ -3619,8 +3668,8 @@ function displayNodeTypeCounts(counts) {
                 if (data.success && data.nodes.length) {
                     renderGraph(data.nodes, data.edges, { append: true });
                     updateGraphStats(kgComputeStats());
-                    focusNode(nodeId);
-                    kgShowToast(`已展开 ${data.nodes.length} 个节点`, 'success');
+                    // 展开后聚焦该节点的关系（新邻居已并入图）
+                    focusNodeRelations(nodeId);
                 } else {
                     kgShowToast(data.message || '该节点没有更多邻居', 'info');
                 }
@@ -3632,8 +3681,13 @@ function displayNodeTypeCounts(counts) {
         }
 
         // ---- 画布工具栏动作 ----
-        function kgRelayout() { if (kgChart) kgApplyOption(); }
-        function kgFitView() { if (kgChart) kgApplyOption(); }
+        function kgRelayout() { if (kgChart) { kgFocusedNodeId = null; kgApplyOption(); } }
+        function kgFitView() {
+            if (!kgChart) return;
+            kgFocusedNodeId = null;
+            kgChart.dispatchAction({ type: 'downplay', seriesIndex: 0 });
+            kgApplyOption();
+        }
         function kgToggleEdgeLabels() {
             kgEdgeLabelOn = !kgEdgeLabelOn;
             if (kgChart) kgApplyOption();
