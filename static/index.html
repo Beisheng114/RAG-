@@ -3479,10 +3479,12 @@ function displayNodeTypeCounts(counts) {
                         const seq = pairSeq[pairKey] = (pairSeq[pairKey] || 0) + 1;
                         let curveness;
                         if (total === 1) {
-                            curveness = 0.15;
+                            // 单条关系走直线：middle 标签与线完全贴合
+                            // （ECharts 边标签按弦中点定位，弧线会导致标签"飘"离连线）
+                            curveness = 0;
                         } else {
-                            // 多边对称展开：±(0.12, 0.3, 0.48, ...)，奇数条时第 1 条走直线
-                            const step = 0.12 + (((seq - 1) >> 1)) * 0.18;
+                            // 多条关系对称展开弧线并收紧曲率，减小标签与弧线中点的偏离
+                            const step = 0.10 + (((seq - 1) >> 1)) * 0.12;
                             curveness = total % 2 === 1 && seq === 1 ? 0 : (seq % 2 === 0 ? -step : step);
                         }
                         return {
