@@ -3533,9 +3533,10 @@ function displayNodeTypeCounts(counts) {
                                 formatter: p => kgRelName(p.data.value),
                                 fontSize: kgLabelFontSize(10),
                                 color: '#4682B4',
-                                backgroundColor: 'rgba(255, 255, 255, 0.85)',
-                                padding: [1, 3],
-                                borderRadius: 3
+                                // 白色描边替代背景框：带背景框的标签走独立布局管线，
+                                // 聚焦/缩放移动视口时会与连线脱钩漂移；文字描边附着连线
+                                textBorderColor: '#FFFFFF',
+                                textBorderWidth: 3
                             }
                         };
                     }),
