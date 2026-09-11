@@ -3307,6 +3307,20 @@ function displayNodeTypeCounts(counts) {
         };
         const KG_TYPE_SIZES = { Equipment: 46, Component: 34, Fault: 38 };
 
+        // 关系类型中文名（与后端 FAULT_GRAPH_REL_TYPES 对应）
+        const KG_REL_NAMES = {
+            CONTAINS: '包含',
+            CONSISTS_OF: '组成',
+            HAS_FAULT: '存在故障',
+            PRESENTS_AS: '表现为',
+            CAUSED_BY: '由…引起',
+            RELATES_TO: '相关',
+            FIXED_BY: '修复方式',
+            HAS_NOTICE: '注意事项',
+            COMES_FROM: '来源'
+        };
+        function kgRelName(rel) { return KG_REL_NAMES[rel] || rel; }
+
         let kgChart = null;        // ECharts 实例（一次初始化，setOption 增量更新）
         let kgNodes = [];          // 原始节点缓存（详情侧栏/增量合并的数据源）
         let kgEdges = [];          // 原始边缓存
@@ -3411,7 +3425,7 @@ function displayNodeTypeCounts(counts) {
 
         function kgTooltipFormatter(params) {
             if (params.dataType === 'edge') {
-                return '关系：' + escapeHtml(params.data.value || '');
+                return '关系：' + escapeHtml(kgRelName(params.data.value || ''));
             }
             const d = params.data;
             if (!d) return '';
@@ -3498,7 +3512,7 @@ function displayNodeTypeCounts(counts) {
                             label: {
                                 show: showEdgeLabels,
                                 position: 'middle',
-                                formatter: p => p.data.value,
+                                formatter: p => kgRelName(p.data.value),
                                 fontSize: kgLabelFontSize(10),
                                 color: '#4682B4',
                                 backgroundColor: 'rgba(255, 255, 255, 0.85)',
@@ -3690,7 +3704,7 @@ function displayNodeTypeCounts(counts) {
             ul.innerHTML = rels.slice(0, 50).map(r => `
                 <li data-node-id="${escapeHtml(String(r.otherId))}">
                     <i class="fa ${r.outgoing ? 'fa-arrow-circle-o-right' : 'fa-arrow-circle-o-left'}"></i>
-                    <span class="kg-rel-type">${escapeHtml(r.rel)}</span>
+                    <span class="kg-rel-type">${escapeHtml(kgRelName(r.rel))}</span>
                     <span class="kg-rel-arrow">${r.outgoing ? '→' : '←'}</span>
                     <span class="kg-rel-node">${escapeHtml(kgTruncate(r.otherName, 14))}</span>
                 </li>`).join('') || '<li class="kg-rel-empty">暂无关联关系</li>';
