@@ -3319,7 +3319,11 @@ function displayNodeTypeCounts(counts) {
             HAS_NOTICE: '注意事项',
             COMES_FROM: '来源'
         };
-        function kgRelName(rel) { return KG_REL_NAMES[rel] || rel; }
+        function kgRelName(rel) {
+            // 数据库关系类型大小写不定（COMES_FROM / comes_from），做不敏感匹配
+            const r = String(rel || '');
+            return KG_REL_NAMES[r] || KG_REL_NAMES[r.toUpperCase()] || r;
+        }
 
         let kgChart = null;        // ECharts 实例（一次初始化，setOption 增量更新）
         let kgNodes = [];          // 原始节点缓存（详情侧栏/增量合并的数据源）
@@ -3351,7 +3355,10 @@ function displayNodeTypeCounts(counts) {
             });
         }
 
-        function kgTypeName(type) { return KG_TYPE_NAMES[type] || type || '未分类'; }
+        function kgTypeName(type) {
+            const t = String(type || '');
+            return KG_TYPE_NAMES[t] || KG_TYPE_NAMES[t.charAt(0).toUpperCase() + t.slice(1)] || t || '未分类';
+        }
 
         function kgTypeColor(type) {
             // 读设计令牌 --kg-*（节点=图例=饼图同色源）
