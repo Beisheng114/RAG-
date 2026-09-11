@@ -3523,7 +3523,8 @@ function displayNodeTypeCounts(counts) {
                     itemStyle: { borderColor: '#fff', borderWidth: 1 },
                     lineStyle: { color: '#8fb3cf', width: 1.2, opacity: 0.7 },
                     label: { show: true, position: 'right', fontSize: kgLabelFontSize(11), color: '#2c5a7a', formatter: p => kgTruncate(p.name, 12) },
-                    labelLayout: { hideOverlap: true },
+                    // 小图（≤150 节点）全部常显名字；大图防重叠（被遮的悬停可见）
+                    labelLayout: { hideOverlap: kgNodes.length > 150 },
                     // 密集治理：缩放时节点不急剧膨胀（nodeScaleRatio），大图斥力自适应更疏散
                     nodeScaleRatio: 0.2,
                     force: {
