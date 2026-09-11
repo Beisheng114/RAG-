@@ -3342,17 +3342,24 @@ function displayNodeTypeCounts(counts) {
 
         // 缩放后同步节点标签字号（局部 setOption，不触发重布局）
         // 注意：不能在此更新 links 数组——graph series 的 links 传入会重建图
-        // 并重启 force 布局（节点冲散、线条错乱），边标签字号在全量渲染时应用
+        // 并重启 force 布局（节点冲散、线条错乱），边标签字号在全量渲染时应用；
+        // setOption 可能重置元素状态机——聚焦激活时需重新派发高亮恢复邻接关系
         function kgSyncLabelSize() {
             if (!kgChart) return;
             const nodeFs = kgLabelFontSize(11);
             kgChart.setOption({
                 series: [{
                     id: 'kg',
-                    label: { fontSize: nodeFs },
-                    emphasis: { label: { fontSize: Math.min(nodeFs + 1, 13) } }
+                    label: { fontSize: nodeFs }
                 }]
             });
+            // 聚焦激活时恢复持久高亮（防止 setOption 后邻接淡化/连线高亮丢失）
+            if (kgFocusedNodeId != null) {
+                const idx = kgNodes.findIndex(n => n.id === kgFocusedNodeId);
+                if (idx >= 0) {
+                    kgChart.dispatchAction({ type: 'highlight', seriesIndex: 0, dataIndex: idx });
+                }
+            }
         }
 
         function kgTypeName(type) {
@@ -3410,10 +3417,14 @@ function displayNodeTypeCounts(counts) {
                 if (params.dataType === 'node') expandNodeNeighbors(params.data.id);
             });
             // 画布缩放时同步标签字号（反向补偿，防止文字相对节点过度放大）
+            // 去抖 150ms：滚轮连续缩放期间避免高频 setOption 重置元素状态
+            // （否则聚焦高亮/邻接淡化有概率被冲掉，节点联系不显示）
+            let kgLabelSyncTimer = null;
             kgChart.on('graphroam', function(params) {
                 if (params && params.zoom != null && params.zoom !== 1) {
                     kgViewZoom = Math.max((kgViewZoom || 1) * params.zoom, 0.3);
-                    kgSyncLabelSize();
+                    clearTimeout(kgLabelSyncTimer);
+                    kgLabelSyncTimer = setTimeout(kgSyncLabelSize, 150);
                 }
             });
             window.addEventListener('resize', function() {
