@@ -1,0 +1,454 @@
+{
+  "kind": "controlled_mock_regression_not_end_to_end",
+  "baseline_commit": "7a614abf7723f0d18285589589cda66beda134f7",
+  "environment": {
+    "python": "3.9.6",
+    "neo4j": "mock",
+    "qdrant": "mock",
+    "embedding": "fixed_scores",
+    "llm_keywords": "fixed",
+    "rerank": "disabled"
+  },
+  "coverage": [
+    "exact entity/relation",
+    "vector-only entity/relation",
+    "empty result",
+    "real RRF",
+    "run_eval metrics"
+  ],
+  "not_covered": [
+    "evaluation/eval_queries.jsonl",
+    "real embedding quality",
+    "LLM quality",
+    "online intelligent/traditional/dual non-regression",
+    "real service consistency"
+  ],
+  "end_to_end_metrics": null,
+  "online_blocker": "baseline run_eval failed with ModuleNotFoundError: neo4j; local models/services not provisioned",
+  "metrics_by_mode": {
+    "baseline_traditional": {
+      "3": {
+        "summary": {
+          "num_queries": 5,
+          "recall_at_k": 0.4,
+          "hit_rate_at_k": 0.4,
+          "mrr": 0.4
+        },
+        "details": [
+          {
+            "query": "主柴油机",
+            "k": 3,
+            "returned": 1,
+            "keyword_hits": 1,
+            "keyword_total": 1,
+            "hit_keywords": [
+              "主柴油机"
+            ],
+            "missed_keywords": [],
+            "first_hit_doc_rank": 1
+          },
+          {
+            "query": "主机",
+            "k": 3,
+            "returned": 0,
+            "keyword_hits": 0,
+            "keyword_total": 1,
+            "hit_keywords": [],
+            "missed_keywords": [
+              "主柴油机"
+            ],
+            "first_hit_doc_rank": null
+          },
+          {
+            "query": "设备故障",
+            "k": 3,
+            "returned": 1,
+            "keyword_hits": 1,
+            "keyword_total": 1,
+            "hit_keywords": [
+              "排气温度过高"
+            ],
+            "missed_keywords": [],
+            "first_hit_doc_rank": 1
+          },
+          {
+            "query": "热负荷异常",
+            "k": 3,
+            "returned": 0,
+            "keyword_hits": 0,
+            "keyword_total": 1,
+            "hit_keywords": [],
+            "missed_keywords": [
+              "排气温度过高"
+            ],
+            "first_hit_doc_rank": null
+          },
+          {
+            "query": "无关问题",
+            "k": 3,
+            "returned": 0,
+            "keyword_hits": 0,
+            "keyword_total": 1,
+            "hit_keywords": [],
+            "missed_keywords": [
+              "不存在的知识"
+            ],
+            "first_hit_doc_rank": null
+          }
+        ]
+      },
+      "5": {
+        "summary": {
+          "num_queries": 5,
+          "recall_at_k": 0.4,
+          "hit_rate_at_k": 0.4,
+          "mrr": 0.4
+        },
+        "details": [
+          {
+            "query": "主柴油机",
+            "k": 5,
+            "returned": 1,
+            "keyword_hits": 1,
+            "keyword_total": 1,
+            "hit_keywords": [
+              "主柴油机"
+            ],
+            "missed_keywords": [],
+            "first_hit_doc_rank": 1
+          },
+          {
+            "query": "主机",
+            "k": 5,
+            "returned": 0,
+            "keyword_hits": 0,
+            "keyword_total": 1,
+            "hit_keywords": [],
+            "missed_keywords": [
+              "主柴油机"
+            ],
+            "first_hit_doc_rank": null
+          },
+          {
+            "query": "设备故障",
+            "k": 5,
+            "returned": 1,
+            "keyword_hits": 1,
+            "keyword_total": 1,
+            "hit_keywords": [
+              "排气温度过高"
+            ],
+            "missed_keywords": [],
+            "first_hit_doc_rank": 1
+          },
+          {
+            "query": "热负荷异常",
+            "k": 5,
+            "returned": 0,
+            "keyword_hits": 0,
+            "keyword_total": 1,
+            "hit_keywords": [],
+            "missed_keywords": [
+              "排气温度过高"
+            ],
+            "first_hit_doc_rank": null
+          },
+          {
+            "query": "无关问题",
+            "k": 5,
+            "returned": 0,
+            "keyword_hits": 0,
+            "keyword_total": 1,
+            "hit_keywords": [],
+            "missed_keywords": [
+              "不存在的知识"
+            ],
+            "first_hit_doc_rank": null
+          }
+        ]
+      },
+      "10": {
+        "summary": {
+          "num_queries": 5,
+          "recall_at_k": 0.4,
+          "hit_rate_at_k": 0.4,
+          "mrr": 0.4
+        },
+        "details": [
+          {
+            "query": "主柴油机",
+            "k": 10,
+            "returned": 1,
+            "keyword_hits": 1,
+            "keyword_total": 1,
+            "hit_keywords": [
+              "主柴油机"
+            ],
+            "missed_keywords": [],
+            "first_hit_doc_rank": 1
+          },
+          {
+            "query": "主机",
+            "k": 10,
+            "returned": 0,
+            "keyword_hits": 0,
+            "keyword_total": 1,
+            "hit_keywords": [],
+            "missed_keywords": [
+              "主柴油机"
+            ],
+            "first_hit_doc_rank": null
+          },
+          {
+            "query": "设备故障",
+            "k": 10,
+            "returned": 1,
+            "keyword_hits": 1,
+            "keyword_total": 1,
+            "hit_keywords": [
+              "排气温度过高"
+            ],
+            "missed_keywords": [],
+            "first_hit_doc_rank": 1
+          },
+          {
+            "query": "热负荷异常",
+            "k": 10,
+            "returned": 0,
+            "keyword_hits": 0,
+            "keyword_total": 1,
+            "hit_keywords": [],
+            "missed_keywords": [
+              "排气温度过高"
+            ],
+            "first_hit_doc_rank": null
+          },
+          {
+            "query": "无关问题",
+            "k": 10,
+            "returned": 0,
+            "keyword_hits": 0,
+            "keyword_total": 1,
+            "hit_keywords": [],
+            "missed_keywords": [
+              "不存在的知识"
+            ],
+            "first_hit_doc_rank": null
+          }
+        ]
+      }
+    },
+    "upgraded_dual": {
+      "3": {
+        "summary": {
+          "num_queries": 5,
+          "recall_at_k": 0.8,
+          "hit_rate_at_k": 0.8,
+          "mrr": 0.8
+        },
+        "details": [
+          {
+            "query": "主柴油机",
+            "k": 3,
+            "returned": 1,
+            "keyword_hits": 1,
+            "keyword_total": 1,
+            "hit_keywords": [
+              "主柴油机"
+            ],
+            "missed_keywords": [],
+            "first_hit_doc_rank": 1
+          },
+          {
+            "query": "主机",
+            "k": 3,
+            "returned": 1,
+            "keyword_hits": 1,
+            "keyword_total": 1,
+            "hit_keywords": [
+              "主柴油机"
+            ],
+            "missed_keywords": [],
+            "first_hit_doc_rank": 1
+          },
+          {
+            "query": "设备故障",
+            "k": 3,
+            "returned": 1,
+            "keyword_hits": 1,
+            "keyword_total": 1,
+            "hit_keywords": [
+              "排气温度过高"
+            ],
+            "missed_keywords": [],
+            "first_hit_doc_rank": 1
+          },
+          {
+            "query": "热负荷异常",
+            "k": 3,
+            "returned": 1,
+            "keyword_hits": 1,
+            "keyword_total": 1,
+            "hit_keywords": [
+              "排气温度过高"
+            ],
+            "missed_keywords": [],
+            "first_hit_doc_rank": 1
+          },
+          {
+            "query": "无关问题",
+            "k": 3,
+            "returned": 0,
+            "keyword_hits": 0,
+            "keyword_total": 1,
+            "hit_keywords": [],
+            "missed_keywords": [
+              "不存在的知识"
+            ],
+            "first_hit_doc_rank": null
+          }
+        ]
+      },
+      "5": {
+        "summary": {
+          "num_queries": 5,
+          "recall_at_k": 0.8,
+          "hit_rate_at_k": 0.8,
+          "mrr": 0.8
+        },
+        "details": [
+          {
+            "query": "主柴油机",
+            "k": 5,
+            "returned": 1,
+            "keyword_hits": 1,
+            "keyword_total": 1,
+            "hit_keywords": [
+              "主柴油机"
+            ],
+            "missed_keywords": [],
+            "first_hit_doc_rank": 1
+          },
+          {
+            "query": "主机",
+            "k": 5,
+            "returned": 1,
+            "keyword_hits": 1,
+            "keyword_total": 1,
+            "hit_keywords": [
+              "主柴油机"
+            ],
+            "missed_keywords": [],
+            "first_hit_doc_rank": 1
+          },
+          {
+            "query": "设备故障",
+            "k": 5,
+            "returned": 1,
+            "keyword_hits": 1,
+            "keyword_total": 1,
+            "hit_keywords": [
+              "排气温度过高"
+            ],
+            "missed_keywords": [],
+            "first_hit_doc_rank": 1
+          },
+          {
+            "query": "热负荷异常",
+            "k": 5,
+            "returned": 1,
+            "keyword_hits": 1,
+            "keyword_total": 1,
+            "hit_keywords": [
+              "排气温度过高"
+            ],
+            "missed_keywords": [],
+            "first_hit_doc_rank": 1
+          },
+          {
+            "query": "无关问题",
+            "k": 5,
+            "returned": 0,
+            "keyword_hits": 0,
+            "keyword_total": 1,
+            "hit_keywords": [],
+            "missed_keywords": [
+              "不存在的知识"
+            ],
+            "first_hit_doc_rank": null
+          }
+        ]
+      },
+      "10": {
+        "summary": {
+          "num_queries": 5,
+          "recall_at_k": 0.8,
+          "hit_rate_at_k": 0.8,
+          "mrr": 0.8
+        },
+        "details": [
+          {
+            "query": "主柴油机",
+            "k": 10,
+            "returned": 1,
+            "keyword_hits": 1,
+            "keyword_total": 1,
+            "hit_keywords": [
+              "主柴油机"
+            ],
+            "missed_keywords": [],
+            "first_hit_doc_rank": 1
+          },
+          {
+            "query": "主机",
+            "k": 10,
+            "returned": 1,
+            "keyword_hits": 1,
+            "keyword_total": 1,
+            "hit_keywords": [
+              "主柴油机"
+            ],
+            "missed_keywords": [],
+            "first_hit_doc_rank": 1
+          },
+          {
+            "query": "设备故障",
+            "k": 10,
+            "returned": 1,
+            "keyword_hits": 1,
+            "keyword_total": 1,
+            "hit_keywords": [
+              "排气温度过高"
+            ],
+            "missed_keywords": [],
+            "first_hit_doc_rank": 1
+          },
+          {
+            "query": "热负荷异常",
+            "k": 10,
+            "returned": 1,
+            "keyword_hits": 1,
+            "keyword_total": 1,
+            "hit_keywords": [
+              "排气温度过高"
+            ],
+            "missed_keywords": [],
+            "first_hit_doc_rank": 1
+          },
+          {
+            "query": "无关问题",
+            "k": 10,
+            "returned": 0,
+            "keyword_hits": 0,
+            "keyword_total": 1,
+            "hit_keywords": [],
+            "missed_keywords": [
+              "不存在的知识"
+            ],
+            "first_hit_doc_rank": null
+          }
+        ]
+      }
+    }
+  }
+}

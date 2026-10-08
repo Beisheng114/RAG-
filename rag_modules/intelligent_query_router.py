@@ -24,6 +24,7 @@ class SearchStrategy(Enum):
     HYBRID_TRADITIONAL = "hybrid_traditional"  # 传统混合检索
     GRAPH_RAG = "graph_rag"  # 图RAG检索
     COMBINED = "combined"  # 组合策略
+    DUAL_LIGHTRAG = "dual_lightrag"
     
 @dataclass
 class QueryAnalysis:
@@ -388,4 +389,3 @@ class IntelligentQueryRouter:
         """
         
         return explanation
- 

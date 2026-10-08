@@ -30,7 +30,6 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 os.chdir(PROJECT_ROOT)
 
-from ragmain import AdvancedGraphRAGSystem  # noqa: E402
 
 
 def load_queries(path: str):
@@ -108,7 +107,7 @@ def _retrieve(system, query: str, k: int, mode: str):
         if system.rerank_module and system.rerank_module.is_enabled():
             recall_k = max(k, int(getattr(system.config, "rerank_candidate_k", 20)))
             docs, analysis = _retrieve_with_k(system, query, recall_k, mode)
-            docs = system.rerank_module.rerank(query, docs, k)
+            docs = system._rerank_retrieval(query, docs, k, mode)
             return docs, analysis
         return _retrieve_with_k(system, query, k, mode)
     finally:
@@ -122,6 +121,8 @@ def _retrieve_with_k(system, query: str, k: int, mode: str):
     if mode == "graph":
         docs = system.graph_rag_retrieval.graph_rag_search(query, k)
         return docs, None
+    if mode == "dual":
+        return system.traditional_retrieval.dual_fusion_search(query, k), None
     docs, analysis = system.query_router.route_query(query, k)
     return docs, analysis
 
@@ -149,7 +150,7 @@ def main():
     parser = argparse.ArgumentParser(description="检索质量评测（recall@k / MRR）")
     parser.add_argument("--queries", default="evaluation/eval_queries.jsonl", help="评测集路径")
     parser.add_argument("--k", type=int, action="append", default=None, help="评测的k值，可多次指定对比")
-    parser.add_argument("--mode", default="intelligent", choices=["intelligent", "traditional", "graph"], help="检索模式")
+    parser.add_argument("--mode", default="intelligent", choices=["intelligent", "traditional", "graph", "dual"], help="检索模式")
     parser.add_argument("--save", action="store_true", help="保存报告到 evaluation/results/")
     args = parser.parse_args()
 
@@ -162,6 +163,7 @@ def main():
     k_list = args.k or [5]
 
     print("初始化RAG系统...")
+    from ragmain import AdvancedGraphRAGSystem
     system = AdvancedGraphRAGSystem()
     system.initialize_system()
     system.build_knowledge_base()

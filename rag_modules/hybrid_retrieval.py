@@ -61,6 +61,8 @@ class RetrievalResult:
     relevance_score: float
     retrieval_level: str  # 'low' or 'high'
     metadata: Dict[str, Any]
+    kv_vector_score: float = 0.0
+    kv_hit_source: str = ""
 
 class HybridRetrievalModule:
     """
@@ -86,6 +88,7 @@ class HybridRetrievalModule:
         self.ollama_model = config.ollama_model
         
         self.graph_indexing = GraphIndexingModule(config, llm_client)
+        self.graph_indexing.vector_module = vector_module
         self.graph_indexed = False
         
         # 添加缓存
@@ -112,7 +115,27 @@ class HybridRetrievalModule:
             logger.info(f"BM25检索器初始化完成，文档数量: {len(chunks)}")
         
         # 初始化图索引
+        self.graph_indexed = False
+        self.graph_indexing.entity_kv_store.clear()
+        self.graph_indexing.relation_kv_store.clear()
+        self.graph_indexing.key_to_entities.clear()
+        self.graph_indexing.key_to_relations.clear()
+        self.node_info_cache.clear()
+        self.query_cache.clear()
         self._build_graph_index()
+        if not getattr(self, "_kv_incremental", False):
+            self._build_kv_vector_index()
+
+    def _build_kv_vector_index(self):
+        if not self.graph_indexed or not getattr(self.config, "qdrant_kv_collection_name", ""):
+            return
+        try:
+            self.vector_module.ensure_kv_collection(
+                self.config.qdrant_kv_collection_name, force_recreate=True
+            )
+            self.vector_module.upsert_kv_vectors(self.graph_indexing._build_kv_vector_records())
+        except Exception as exc:
+            logger.warning("KV 向量索引构建失败，保留精确检索: %s", exc)
 
     # ---------- BM25 索引持久化 ----------
 
@@ -212,7 +235,7 @@ class HybridRetrievalModule:
         except Exception as e:
             logger.error(f"构建图索引失败: {e}")
             
-    def _extract_relationships_from_graph(self) -> List[Tuple[str, str, str]]:
+    def _extract_relationships_from_graph(self, node_ids=None) -> List[Tuple[str, str, str]]:
         """从Neo4j图中提取关系"""
         relationships = []
         
@@ -220,17 +243,19 @@ class HybridRetrievalModule:
             with self.driver.session() as session:
                 query = """
                 MATCH (source)-[r]->(target)
-                RETURN 
+                WITH r,
                     COALESCE(source.equipment_id, source.component_id, source.fault_id, 
                              source.phenomenon_id, source.cause_id, source.action_id,
                              source.notice_id, source.category_id, source.source_id, source.name) as source_id,
-                    type(r) as relation_type,
                     COALESCE(target.equipment_id, target.component_id, target.fault_id,
                              target.phenomenon_id, target.cause_id, target.action_id,
                              target.notice_id, target.category_id, target.source_id, target.name) as target_id
-                LIMIT 1000
+                WHERE $ids IS NULL OR toString(source_id) IN $ids OR toString(target_id) IN $ids
+                RETURN source_id, type(r) as relation_type, target_id
                 """
-                result = session.run(query)
+                if node_ids is None:
+                    query += " LIMIT 1000"
+                result = session.run(query, {"ids": None if node_ids is None else [str(n) for n in node_ids]})
                 
                 for record in result:
                     if record["source_id"] and record["target_id"]:
@@ -248,121 +273,51 @@ class HybridRetrievalModule:
 
 
     def extract_query_keywords(self, query: str, retry_count: int = 1) -> Tuple[List[str], List[str]]:
-#         """
-#         提取查询关键词：实体级 + 主题级
-        
-#         Args:
-#             query: 用户查询文本
-#             retry_count: 重试次数
-            
-#         Returns:
-#             (实体级关键词列表, 主题级关键词列表)
-#         """
-#         prompt = f"""
-# 作为船舶故障维修知识助手，请分析以下查询并提取关键词，分为两个层次：
-# 查询：{query}
-# 提取规则：
-# 1. 实体级关键词：具体的设备名称、部件、故障现象、故障原因等有形实体
-#    - 例如：主机、发电机、冷却泵、轴承、过热、异响、泄漏、振动
-#    - 对于抽象查询，推测相关的具体设备/部件
-
-# 2. 主题级关键词：抽象概念、维修主题、故障类型、维修特点等
-#    - 例如：故障诊断、预防性维护、紧急维修、电气故障、机械故障、液压系统
-#    - 排除动作词：推荐、介绍、维修、怎么做等
-
-# 示例：
-# 查询："主机过热故障如何处理" 
-# {{
-#     "entity_keywords": ["主机", "冷却泵", "温度传感器", "润滑油", "散热器"],
-#     "topic_keywords": ["过热", "故障诊断", "冷却系统", "温度控制", "预防性维护"]
-# }}
-
-# 查询："发电机异响怎么排查"
-# {{
-#     "entity_keywords": ["发电机", "轴承", "齿轮箱", "联轴器", "润滑油"],
-#     "topic_keywords": ["异响", "故障排查", "机械故障", "振动分析", "润滑系统"]
-# }}
-
-# 请严格按照JSON格式返回，不要包含多余的文字：
-# {{
-#     "entity_keywords": ["实体1", "实体2", ...],
-#     "topic_keywords": ["主题1", "主题2", ...]
-# }}
-# """
-        
-#         for attempt in range(retry_count):
-#             try:
-#                 if self.llm_provider == "ollama":
-#                     # 使用Ollama原生API
-#                     url = f"{self.ollama_base_url}/api/chat"
-#                     payload = {
-#                         "model": self.ollama_model,
-#                         "messages": [{"role": "user", "content": prompt}],
-#                         "stream": False,
-#                         "options": {
-#                             "temperature": 0.1,
-#                             "num_predict": 500
-#                         }
-#                     }
-#                     response = requests.post(url, json=payload, timeout=60)
-#                     response.raise_for_status()
-#                     result = response.json()
-#                     content = result["message"]["content"].strip()
-#                 else:
-#                     # 使用vLLM OpenAI兼容API
-#                     response = self.llm_client.chat.completions.create(
-#                         model=self.config.llm_model,
-#                         messages=[{"role": "user", "content": prompt}],
-#                         temperature=0.1,
-#                         max_tokens=500
-#                     )
-#                     content = response.choices[0].message.content.strip()
-                
-#                 # 检查内容是否为空
-#                 if not content:
-#                     logger.warning(f"LLM返回空内容 (尝试 {attempt + 1}/{retry_count})")
-#                     if attempt < retry_count - 1:
-#                         continue
-#                     return self._fallback_keyword_extraction(query)
-#                 if "<|think|>" in content:
-#                     # 移除<|think|>...</|think|>标签及其内容
-#                     content = content.split("<|think|>")[-1].split("</|think>")[-1].strip()
-                
-#                 # 尝试从内容中提取JSON部分
-#                 import re
-#                 json_match = re.search(r'\{[\s\S]*\}', content)
-#                 if json_match:
-#                     content = json_match.group(0)
-#                 else:
-#                     logger.warning(f"未找到JSON内容 (尝试 {attempt + 1}/{retry_count}): {content[:100]}")
-#                     if attempt < retry_count - 1:
-#                         continue
-#                     return self._fallback_keyword_extraction(query)
-                
-#                 result = json.loads(content)
-#                 entity_keywords = result.get("entity_keywords", [])
-#                 topic_keywords = result.get("topic_keywords", [])
-                
-#                 # 验证结果
-#                 if not entity_keywords and not topic_keywords:
-#                     if attempt < retry_count - 1:
-#                         logger.warning(f"关键词提取结果为空，重试 {attempt + 1}/{retry_count}")
-#                         continue
-                
-#                 logger.info(f"关键词提取完成 - 实体级: {entity_keywords}, 主题级: {topic_keywords}")
-#                 return entity_keywords, topic_keywords
-                
-#             except json.JSONDecodeError as e:
-#                 logger.error(f"JSON解析失败 (尝试 {attempt + 1}/{retry_count}): {e}")
-#                 logger.debug(f"原始内容: {content[:200] if 'content' in locals() else 'N/A'}")
-#                 if attempt == retry_count - 1:
-#                     return self._fallback_keyword_extraction(query)
-#             except Exception as e:
-#                 logger.error(f"关键词提取失败 (尝试 {attempt + 1}/{retry_count}): {e}")
-#                 if attempt == retry_count - 1:
-#                     return self._fallback_keyword_extraction(query)
-        
-        return self._fallback_keyword_extraction(query)
+        """规则快速路径；复杂查询用 LLM 提取双层关键词，失败回退词表。"""
+        fallback = self._fallback_keyword_extraction(query)
+        relation_keywords = ["属于", "包含", "组成", "相关", "联系", "连接", "导致", "表现为", "需通过", "附带"]
+        if (getattr(self.config, "lightrag_llm_keyword_fast_path", True)
+                and getattr(self.config, "router_fast_path", True)
+                and fallback[0] and not any(kw in query for kw in relation_keywords)):
+            return fallback
+        prompt = f"""作为船舶故障维修知识助手，分析查询并提取两层关键词。
+查询：{query}
+实体级：具体设备、部件、故障现象、原因，如主机、轴承、过热、泄漏。
+主题级：关系或维修主题，如故障诊断、机械故障、冷却系统、预防性维护。
+排除推荐、介绍、怎么做等动作词。只返回 JSON：
+{{"entity_keywords": ["实体"], "topic_keywords": ["主题"]}}"""
+        for attempt in range(max(1, retry_count)):
+            try:
+                timeout = getattr(self.config, "llm_timeout_chat", 60)
+                if self.llm_provider == "ollama":
+                    response = requests.post(
+                        f"{self.ollama_base_url}/api/chat",
+                        json={"model": self.ollama_model,
+                              "messages": [{"role": "user", "content": prompt}],
+                              "stream": False, "options": {"temperature": 0.1, "num_predict": 500}},
+                        timeout=timeout,
+                    )
+                    response.raise_for_status()
+                    content = response.json()["message"]["content"]
+                else:
+                    response = self.llm_client.chat.completions.create(
+                        model=self.config.llm_model,
+                        messages=[{"role": "user", "content": prompt}],
+                        temperature=0.1, max_tokens=500, timeout=timeout,
+                    )
+                    content = response.choices[0].message.content
+                content = re.sub(r"<\|think\|>[\s\S]*?</\|think\|>|<think>[\s\S]*?</think>", "", content or "")
+                match = re.search(r"\{[\s\S]*\}", content)
+                result = json.loads(match.group(0)) if match else {}
+                levels = [result.get("entity_keywords", []), result.get("topic_keywords", [])]
+                if not all(isinstance(terms, list) and all(isinstance(t, str) for t in terms) for terms in levels):
+                    raise ValueError("keyword fields must be lists of strings")
+                entities, topics = [list(dict.fromkeys(t.strip() for t in terms if t.strip())) for terms in levels]
+                if entities or topics:
+                    return entities, topics
+            except Exception as exc:
+                logger.warning("双层关键词提取失败 (%s/%s): %s", attempt + 1, retry_count, exc)
+        return fallback
     
     def _fallback_keyword_extraction(self, query: str) -> Tuple[List[str], List[str]]:
         """
@@ -500,6 +455,41 @@ class HybridRetrievalModule:
             if prev_k is not None:
                 retriever.k = prev_k
     
+    @staticmethod
+    def _retrieval_id(result):
+        rid = (result.metadata or {}).get("relation_id")
+        if rid:
+            return f"rel:{rid}"
+        if result.neo4j_node_id is not None and str(result.neo4j_node_id).strip():
+            return f"node:{result.neo4j_node_id}"
+        return "txt:" + hashlib.md5(result.content[:400].encode("utf-8")).hexdigest()
+
+    def _unique_results(self, results):
+        unique = {}
+        for result in sorted(results, key=lambda r: r.relevance_score, reverse=True):
+            key = self._retrieval_id(result)
+            if key not in unique:
+                unique[key] = result
+            elif {unique[key].kv_hit_source, result.kv_hit_source} >= {"exact", "vector"}:
+                unique[key].kv_hit_source = "exact+vector"
+                unique[key].kv_vector_score = max(unique[key].kv_vector_score, result.kv_vector_score)
+        return list(unique.values())
+
+    def _kv_candidates(self, keyword, top_k, level):
+        graph = self.graph_indexing
+        exact = graph.get_entities_by_key(keyword) if level == "low" else graph.get_relations_by_key(keyword)
+        vector = graph.get_entities_by_vector(keyword, top_k) if level == "low" else graph.get_relations_by_vector(keyword, top_k)
+        def key(kv):
+            return kv.metadata["neo4j_node_id"] if level == "low" else kv.relation_id
+        hits = {key(kv): [kv, "exact", 0.0] for kv in exact}
+        for kv in vector:
+            score = max(0.0, min(1.0, float(kv.metadata.get("kv_vector_score", 0.0))))
+            if key(kv) in hits:
+                hits[key(kv)][1:] = ["exact+vector", score]
+            else:
+                hits[key(kv)] = [kv, "vector", score]
+        return hits.values()
+
     def entity_level_retrieval(self, entity_keywords: List[str], top_k: int = 5) -> List[RetrievalResult]:
         """
         实体级检索：专注于具体实体和关系
@@ -510,9 +500,7 @@ class HybridRetrievalModule:
         # 1. 使用图索引进行实体检索
         for keyword in entity_keywords:
             # 检索匹配的实体
-            entities = self.graph_indexing.get_entities_by_key(keyword)
-            
-            for entity in entities:
+            for entity, hit_source, vector_score in self._kv_candidates(keyword, top_k, "low"):
                 # 获取邻居信息
                 neighbors = self._get_node_neighbors(entity.metadata["neo4j_node_id"], max_neighbors=2)
                 
@@ -525,8 +513,10 @@ class HybridRetrievalModule:
                     content=enhanced_content,
                     neo4j_node_id=entity.metadata["neo4j_node_id"],
                     entity_type=entity.entity_type,
-                    relevance_score=0.9,  # 精确匹配得分较高
+                    relevance_score=vector_score * 0.9 if hit_source == "vector" else 0.9,
                     retrieval_level="entity",
+                    kv_vector_score=vector_score,
+                    kv_hit_source=hit_source,
                     metadata={
                         "entity_name": entity.entity_name,
                         "entity_type": entity.entity_type,
@@ -536,6 +526,7 @@ class HybridRetrievalModule:
                 ))
         
         # 2. 如果图索引结果不足，使用Neo4j进行补充检索
+        results = self._unique_results(results)
         if len(results) < top_k:
             neo4j_results = self._neo4j_entity_level_search(entity_keywords, top_k - len(results))
             results.extend(neo4j_results)
@@ -634,9 +625,7 @@ class HybridRetrievalModule:
         # 1. 使用图索引进行关系/主题检索
         for keyword in topic_keywords:
             # 检索匹配的关系
-            relations = self.graph_indexing.get_relations_by_key(keyword)
-            
-            for relation in relations:
+            for relation, hit_source, vector_score in self._kv_candidates(keyword, top_k, "high"):
                 # 获取相关实体信息
                 source_entity = self.graph_indexing.entity_kv_store.get(relation.source_entity)
                 target_entity = self.graph_indexing.entity_kv_store.get(relation.target_entity)
@@ -661,8 +650,10 @@ class HybridRetrievalModule:
                         content='\n'.join(content_parts),
                         neo4j_node_id=relation.target_entity,
                         entity_type=target_entity.entity_type,
-                        relevance_score=0.95,  # 主题匹配得分
+                        relevance_score=vector_score * 0.9 if hit_source == "vector" else 0.95,
                         retrieval_level="topic",
+                        kv_vector_score=vector_score,
+                        kv_hit_source=hit_source,
                         metadata={
                             "relation_id": relation.relation_id,
                             "relation_type": relation.relation_type,
@@ -701,6 +692,7 @@ class HybridRetrievalModule:
                     ))
         
         # 3. 如果结果不足，使用Neo4j进行补充检索
+        results = self._unique_results(results)
         if len(results) < top_k:
             neo4j_results = self._neo4j_topic_level_search(topic_keywords, top_k - len(results))
             results.extend(neo4j_results)
@@ -771,6 +763,35 @@ class HybridRetrievalModule:
             
         return results
         
+    def _result_document(self, result, search_type):
+        metadata = result.metadata or {}
+        name = metadata.get("name") or metadata.get("entity_name") or metadata.get("target_name")
+        if not name:
+            name = self._get_node_name_from_neo4j(result.neo4j_node_id) if result.neo4j_node_id else "未知设备"
+        return Document(page_content=result.content, metadata={
+            "neo4j_node_id": result.neo4j_node_id, "entity_type": result.entity_type,
+            "retrieval_level": result.retrieval_level, "relevance_score": result.relevance_score,
+            "kv_vector_score": result.kv_vector_score, "kv_hit_source": result.kv_hit_source,
+            "entity_name": name, "search_type": search_type,
+            "sources": self._get_node_source_info(result.neo4j_node_id) if result.neo4j_node_id else [],
+            **metadata,
+        })
+
+    def dual_fusion_search(self, query: str, top_k: int = 5) -> List[Document]:
+        if top_k <= 0:
+            return []
+        entity_keywords, topic_keywords = self.extract_query_keywords(query)
+        low = self._unique_results(self.entity_level_retrieval(entity_keywords, top_k * 2))
+        high = self._unique_results(self.topic_level_retrieval(topic_keywords, top_k * 2))
+        # Relation identity precedes node identity: distinct causes must not collapse.
+        ranked = rrf_fuse({"low": low, "high": high}, doc_id_fn=self._retrieval_id)
+        docs = []
+        for item in ranked[:top_k]:
+            doc = self._result_document(item["doc"], "dual_fusion")
+            doc.metadata.update(rrf_score=item["score"], recall_channels=item["channels"])
+            docs.append(doc)
+        return docs
+
     def dual_level_retrieval(self, query: str, top_k: int = 5) -> List[Document]:
         """
         双层检索：结合实体级和主题级检索
@@ -829,6 +850,8 @@ class HybridRetrievalModule:
                     "entity_type": result.entity_type,
                     "retrieval_level": result.retrieval_level,
                     "relevance_score": result.relevance_score,
+                    "kv_vector_score": result.kv_vector_score,
+                    "kv_hit_source": result.kv_hit_source,
                     "entity_name": entity_name,
                     "search_type": "dual_level",
                     "sources": source_info,
@@ -1106,4 +1129,4 @@ class HybridRetrievalModule:
         """关闭资源连接"""
         if self.driver:
             self.driver.close()
-            logger.info("Neo4j连接已关闭") 
+            logger.info("Neo4j连接已关闭")

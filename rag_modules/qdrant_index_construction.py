@@ -86,6 +86,7 @@ class QdrantConfig:
 
     # 查询阶段 HNSW 的 ef；略小于默认时可缩短 Qdrant 检索耗时，过大则变慢。None 表示使用服务端默认。
     hnsw_ef_search: Optional[int] = 128
+    kv_collection_name: str = "ship_maintenance_kv"
 
 
 @dataclass
@@ -246,6 +247,66 @@ class QdrantIndexConstructionModule:
             logger.error(f"创建集合失败: {e}")
             return False
     
+    def ensure_kv_collection(self, name=None, force_recreate=False):
+        name = self.config.kv_collection_name if name is None else name
+        if not name:
+            return False
+        if name == self.config.collection_name:
+            raise ValueError("KV collection must differ from chunk collection")
+        self.config.kv_collection_name = name
+        if self.client.collection_exists(name):
+            if not force_recreate:
+                return True
+            self.client.delete_collection(name)
+        distance = {"Cosine": Distance.COSINE, "Euclidean": Distance.EUCLID, "Dot": Distance.DOT}
+        self.client.create_collection(
+            collection_name=name,
+            vectors_config=VectorParams(size=self.config.vector_size,
+                                        distance=distance.get(self.config.distance, Distance.COSINE)),
+            hnsw_config=models.HnswConfigDiff(**self.config.hnsw_config),
+        )
+        return True
+
+    @staticmethod
+    def _kv_point_id(record_id):
+        return str(uuid.uuid5(uuid.NAMESPACE_URL, "ship-maintenance-kv:" + record_id))
+
+    def delete_kv_vectors(self, record_ids):
+        if record_ids and self.config.kv_collection_name:
+            self.client.delete(
+                collection_name=self.config.kv_collection_name,
+                points_selector=models.PointIdsList(points=[self._kv_point_id(r) for r in record_ids]),
+                wait=True,
+            )
+
+    def upsert_kv_vectors(self, records):
+        if not records or not self.ensure_kv_collection():
+            return
+        for start in range(0, len(records), 100):
+            batch = records[start:start + 100]
+            vectors = self.embeddings.embed_documents([r.text for r in batch])
+            points = [PointStruct(
+                id=self._kv_point_id(r.record_id), vector=vector,
+                payload={"record_id": r.record_id, "source_id": r.source_id,
+                         "kv_kind": r.kv_kind, "level": r.level, "text": r.text,
+                         "entity_type": r.entity_type, "metadata": r.metadata},
+            ) for r, vector in zip(batch, vectors)]
+            self.client.upsert(collection_name=self.config.kv_collection_name, points=points, wait=True)
+
+    def search_kv_vectors(self, query_text, level, top_k):
+        if not self.config.kv_collection_name or top_k <= 0:
+            return []
+        query_filter = Filter(must=[FieldCondition(key="level", match=MatchValue(value=level))])
+        vector = self.embeddings.embed_query(query_text)
+        params = models.SearchParams(hnsw_ef=self.config.hnsw_ef_search) if self.config.hnsw_ef_search else None
+        kwargs = dict(collection_name=self.config.kv_collection_name,
+                      query_filter=query_filter, limit=top_k, with_payload=True, search_params=params)
+        if hasattr(self.client, "query_points"):
+            hits = self.client.query_points(query=vector, **kwargs).points
+        else:
+            hits = self.client.search(query_vector=vector, **kwargs)
+        return [{"source_id": h.payload["source_id"], "score": float(h.score)} for h in hits]
+
     def build_vector_index(self, chunks: List[Document], batch_size: int = 100) -> bool:
         """
         构建向量索引
@@ -999,6 +1060,13 @@ class QdrantIndexConstructionModule:
         try:
             self.client.delete_collection(self.config.collection_name)
             self.collection_created = False
+            name = self.config.kv_collection_name
+            if name and name != self.config.collection_name:
+                try:
+                    if self.client.collection_exists(name):
+                        self.client.delete_collection(name)
+                except Exception as exc:
+                    logger.warning("删除配套 KV 集合失败（下次全量构建重灌）: %s", exc)
             logger.info(f"已删除集合: {self.config.collection_name}")
             return True
             

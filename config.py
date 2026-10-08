@@ -36,6 +36,7 @@ class GraphRAGConfig:
     qdrant_grpc_port: int = int(os.getenv("QDRANT_GRPC_PORT", "6334"))
     qdrant_prefer_grpc: bool = True
     qdrant_collection_name: str = "ship_maintenance_knowledge"
+    qdrant_kv_collection_name: str = "ship_maintenance_kv"  # 空字符串关闭 KV 向量旁路
     qdrant_vector_size: int = 768  # BGE-base-zh-v1.5的向量维度（bge-base 为 768 维）
     qdrant_distance: str = "Cosine"  # Cosine, Euclidean, Dot
     qdrant_hnsw_m: int = 16
@@ -91,6 +92,8 @@ class GraphRAGConfig:
 
     # 图索引配置
     enable_llm_relation_keys: bool = False  # 是否使用LLM增强关系索引键
+    lightrag_llm_keyword_fast_path: bool = True
+    dual_high_floor: int = 2
 
     # 检索策略配置
     use_intelligent_router: bool = True  # 是否使用智能查询路由
@@ -123,6 +126,7 @@ class GraphRAGConfig:
             'qdrant_grpc_port': self.qdrant_grpc_port,
             'qdrant_prefer_grpc': self.qdrant_prefer_grpc,
             'qdrant_collection_name': self.qdrant_collection_name,
+            'qdrant_kv_collection_name': self.qdrant_kv_collection_name,
             'qdrant_vector_size': self.qdrant_vector_size,
             'qdrant_distance': self.qdrant_distance,
             'qdrant_hnsw_m': self.qdrant_hnsw_m,
@@ -145,9 +149,11 @@ class GraphRAGConfig:
             'chunk_overlap': self.chunk_overlap,
             'max_graph_depth': self.max_graph_depth,
             'enable_llm_relation_keys': self.enable_llm_relation_keys,
+            'lightrag_llm_keyword_fast_path': self.lightrag_llm_keyword_fast_path,
+            'dual_high_floor': self.dual_high_floor,
             'use_intelligent_router': self.use_intelligent_router,
             'hybrid_search_weight': self.hybrid_search_weight
         }
 
 # 默认配置实例
-DEFAULT_CONFIG = GraphRAGConfig() 
+DEFAULT_CONFIG = GraphRAGConfig()

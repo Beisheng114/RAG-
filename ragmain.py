@@ -98,6 +98,7 @@ class AdvancedGraphRAGSystem:
                 grpc_port=self.config.qdrant_grpc_port,
                 prefer_grpc=self.config.qdrant_prefer_grpc,
                 collection_name=self.config.qdrant_collection_name,
+                kv_collection_name=self.config.qdrant_kv_collection_name,
                 vector_size=self.config.qdrant_vector_size,
                 distance=self.config.qdrant_distance,
                 hnsw_config={
@@ -288,6 +289,22 @@ class AdvancedGraphRAGSystem:
             categories = list(stats['categories'].keys())[:10]
             logger.info(f"   🏷️ 主要分类: {', '.join(categories)}")
 
+    def _rerank_retrieval(self, query, docs, top_k, search_mode):
+        if search_mode != "dual":
+            return self.rerank_module.rerank(query, docs, top_k)
+        ranked = self.rerank_module.rerank(query, docs, top_k)
+        high = [d for d in docs if d.metadata.get("retrieval_level") in ("topic", "high")
+                or "high" in d.metadata.get("recall_channels", [])]
+        floor = min(max(0, int(getattr(self.config, "dual_high_floor", 2))), top_k, len(high))
+        if floor == 0:
+            return ranked
+        # Rank high candidates separately so truncation cannot discard every topic.
+        reserved = self.rerank_module.rerank(query, high, floor)
+        reserved_ids = {id(d) for d in reserved}
+        remaining = [d for d in ranked if id(d) not in reserved_ids][:max(0, top_k - len(reserved))]
+        selected = reserved_ids | {id(d) for d in remaining}
+        return [d for d in ranked if id(d) in selected] + [d for d in reserved if all(d is not x for x in ranked)]
+
     def ask_question_with_routing(self, question: str, stream: bool = False, explain_routing: bool = False, conversation_history: list = None, search_mode: str = "intelligent"):
         """
         智能问答：自动选择最佳检索策略
@@ -297,7 +314,7 @@ class AdvancedGraphRAGSystem:
             stream: 是否使用流式输出
             explain_routing: 是否解释路由决策
             conversation_history: 对话历史（可选）
-            search_mode: 搜索模式 ("intelligent", "traditional", "graph", "combined")
+            search_mode: 搜索模式 ("intelligent", "traditional", "graph", "combined", "dual")
             
         Returns:
             (result, analysis) 元组
@@ -390,6 +407,15 @@ class AdvancedGraphRAGSystem:
                     confidence=1.0,
                     reasoning="用户选择组合搜索模式"
                 )
+            elif search_mode == "dual":
+                relevant_docs = self.traditional_retrieval.dual_fusion_search(retrieval_query, recall_k)
+                from rag_modules.intelligent_query_router import QueryAnalysis, SearchStrategy
+                analysis = QueryAnalysis(
+                    query_complexity=0.6, relationship_intensity=0.6,
+                    reasoning_required=True, entity_count=2,
+                    recommended_strategy=SearchStrategy.DUAL_LIGHTRAG,
+                    confidence=1.0, reasoning="用户选择 LightRAG 双层融合模式",
+                )
             else:
                 # 智能路由模式（默认）
                 logger.info("🧠 使用智能路由模式...")
@@ -397,7 +423,7 @@ class AdvancedGraphRAGSystem:
 
             # Rerank 精排：多路候选 → 精排截断到 top_k（模型不可用时自动跳过）
             if self.rerank_module and self.rerank_module.is_enabled() and relevant_docs:
-                relevant_docs = self.rerank_module.rerank(retrieval_query, relevant_docs, self.config.top_k)
+                relevant_docs = self._rerank_retrieval(retrieval_query, relevant_docs, self.config.top_k, search_mode)
 
             # 2. 显示路由信息
             strategy_icons = {
@@ -586,6 +612,8 @@ class AdvancedGraphRAGSystem:
 
         try:
             logger.info(f"开始增量更新向量索引：节点数={len(neo4j_node_ids)}")
+            graph_index = self.traditional_retrieval.graph_indexing
+            old_kv_records = graph_index._build_kv_vector_records(neo4j_node_ids)
 
             # 如果向量集合不存在，直接走全量构建
             if not getattr(self.index_module, "has_collection", lambda: True)():
@@ -623,7 +651,24 @@ class AdvancedGraphRAGSystem:
                 chunk_size=self.config.chunk_size,
                 chunk_overlap=self.config.chunk_overlap,
             )
-            self._initialize_retrievers(full_chunks)
+            self.traditional_retrieval._kv_incremental = True
+            try:
+                self._initialize_retrievers(full_chunks)
+            finally:
+                self.traditional_retrieval._kv_incremental = False
+
+            if getattr(self.config, "qdrant_kv_collection_name", ""):
+                try:
+                    self.index_module.ensure_kv_collection(self.config.qdrant_kv_collection_name)
+                    relationships = self.traditional_retrieval._extract_relationships_from_graph(neo4j_node_ids)
+                    graph_index.create_relation_key_values(relationships)
+                    graph_index._rebuild_key_mappings()
+                    records = graph_index._build_kv_vector_records(neo4j_node_ids)
+                    record_ids = sorted({r.record_id for r in old_kv_records + records})
+                    self.index_module.delete_kv_vectors(record_ids)
+                    self.index_module.upsert_kv_vectors(records)
+                except Exception as exc:
+                    logger.warning("增量 KV 向量更新失败（不阻断主链路）: %s", exc)
 
             logger.info("增量更新完成")
         except Exception as e:

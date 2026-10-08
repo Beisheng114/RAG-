@@ -2,7 +2,7 @@ import json
 import logging
 import requests
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Dict, List, Any, Tuple
 
 logger = logging.getLogger(__name__)
@@ -26,6 +26,17 @@ class RelationKeyValue:
     relation_type: str     # 关系类型
     source_entity: str     # 源实体
     target_entity: str     # 目标实体
+    metadata: Dict[str, Any]
+
+
+@dataclass
+class KVVectorRecord:
+    record_id: str
+    kv_kind: str
+    source_id: str
+    text: str
+    level: str
+    entity_type: str
     metadata: Dict[str, Any]
 
 
@@ -57,6 +68,58 @@ class GraphIndexingModule:
         # 索引映射：key -> entity/relation IDs
         self.key_to_entities: Dict[str, List[str]] = defaultdict(list)
         self.key_to_relations: Dict[str, List[str]] = defaultdict(list)
+        self.vector_module = None
+
+    def _build_kv_vector_records(self, node_ids=None) -> List[KVVectorRecord]:
+        ids = None if node_ids is None else {str(n) for n in node_ids}
+        records = []
+        for eid, entity in self.entity_kv_store.items():
+            if ids is not None and str(eid) not in ids:
+                continue
+            records.append(KVVectorRecord(
+                record_id=f"entity:{eid}", kv_kind="entity", source_id=str(eid),
+                text=f"{entity.entity_name}\n{entity.value_content}", level="low",
+                entity_type=entity.entity_type, metadata=dict(entity.metadata),
+            ))
+        for rid, relation in self.relation_kv_store.items():
+            if ids is not None and not ids.intersection(
+                {str(relation.source_entity), str(relation.target_entity)}
+            ):
+                continue
+            source = self.entity_kv_store.get(relation.source_entity)
+            target = self.entity_kv_store.get(relation.target_entity)
+            if source is None or target is None:
+                continue
+            records.append(KVVectorRecord(
+                record_id=f"relation:{rid}", kv_kind="relation", source_id=str(rid),
+                text=f"{relation.relation_type}\n{source.entity_name}→{target.entity_name}\n{relation.value_content}",
+                level="high", entity_type=relation.relation_type,
+                metadata={**relation.metadata, "source_entity_id": str(relation.source_entity),
+                          "target_entity_id": str(relation.target_entity)},
+            ))
+        return records
+
+    def _query_kv_by_vector(self, query_text, level, top_k):
+        if not self.vector_module or not getattr(self.config, "qdrant_kv_collection_name", ""):
+            return []
+        try:
+            hits = self.vector_module.search_kv_vectors(query_text, level, top_k)
+            store = self.entity_kv_store if level == "low" else self.relation_kv_store
+            results = []
+            for hit in hits:
+                kv = store.get(hit["source_id"])
+                if kv is not None:
+                    results.append(replace(kv, metadata={**kv.metadata, "kv_vector_score": hit["score"]}))
+            return results
+        except Exception as exc:
+            logger.warning("KV 向量召回失败，保留精确检索: %s", exc)
+            return []
+
+    def get_entities_by_vector(self, query_text, top_k=5):
+        return self._query_kv_by_vector(query_text, "low", top_k)
+
+    def get_relations_by_vector(self, query_text, top_k=5):
+        return self._query_kv_by_vector(query_text, "high", top_k)
 
 
 
